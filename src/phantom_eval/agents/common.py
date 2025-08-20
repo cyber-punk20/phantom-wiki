@@ -319,12 +319,15 @@ class RAGMixin:
             self.retriever = vectorstore.as_retriever(search_kwargs={"k": retriever_num_documents})
 
     def get_RAG_evidence(self, question: str) -> str:
+        return self.get_RAG_evidence(question, self.retriever_num_documents)
+
+    def get_RAG_evidence(self, question: str, retriever_num_documents: int) -> str:
         """
         Returns retrieved articles given the question from the text corpus.
         The retrieved articles are concatenated as a string.
         """
         if self.retrieval_method in ["bm25", "dense"]:
-            docs = self.retriever._search(question, num=self.retriever_num_documents, return_score=False)
+            docs = self.retriever._search(question, num=retriever_num_documents, return_score=False)
             docs = [doc["contents"] for doc in docs]
         else:
             docs = [doc.page_content for doc in self.retriever.invoke(question)]
