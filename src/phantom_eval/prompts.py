@@ -18,6 +18,55 @@ class LLMPrompt(abc.ABC):
             A PromptTemplate object containing the prompt template.
         """
 
+SUFFICIENT_CONTEXT_AUTORATOR_EXAMPLE = f"""
+  EXAMPLE:
+  ### QUESTION
+  Who is the aunt of Vicki Hackworth?
+  ### References
+  # Vicki Hackworth ## Family The sisters of Vicki Hackworth are Aida Wang, Barabara Beltran.  The mother of Vicki Hackworth is Shelli Beltran.  The father of Vicki Hackworth is Dino Beltran.  The son of Vicki Hackworth is Virgil Hackworth.  The daughters of Vicki Hackworth are Leeann Hackworth, Leisa Lutz.  The husband of Vicki Hackworth is Ricardo Hackworth.  ## Friends The friends of Vicki Hackworth are Brian Beltran, Dominique Smock, Eli Smock.  ## Attributes The date of birth of Vicki Hackworth is 0985-05-30.  The occupation of Vicki Hackworth is police officer.  The hobby of Vicki Hackworth is meditation.  The gender of Vicki Hackworth is female.
+  # Shelli Beltran ## Family The sister of Shelli Beltran is Stacia Toombs.  The mother of Shelli Beltran is Alison Smock.  The father of Shelli Beltran is Williams Smock.  The daughters of Shelli Beltran are Aida Wang, Barabara Beltran, Vicki Hackworth.  The husband of Shelli Beltran is Dino Beltran.  ## Friends The friends of Shelli Beltran are Brian Beltran, Eli Smock, Isiah Lutz, Leslee Toombs, Lesley Lutz, Ryan Wang.  ## Attributes The date of birth of Shelli Beltran is 0958-03-08.  The occupation of Shelli Beltran is occupational therapist.  The hobby of Shelli Beltran is sociology.  The gender of Shelli Beltran is female.
+  # Dino Beltran ## Family The brother of Dino Beltran is Orlando Beltran.  The mother of Dino Beltran is Daisy Beltran.  The father of Dino Beltran is Brian Beltran.  The daughters of Dino Beltran are Aida Wang, Barabara Beltran, Vicki Hackworth.  The wife of Dino Beltran is Shelli Beltran.  ## Friends The friend of Dino Beltran is Alvaro Smock.  ## Attributes The date of birth of Dino Beltran is 0958-08-09.  The occupation of Dino Beltran is associate professor.  The hobby of Dino Beltran is shogi.  The gender of Dino Beltran is male.
+
+  ### EXPLANATION
+  The parents of Vicki Hackworth are Shelli Beltran, Dino Beltran. Dino Beltran has no sister, and the sister of Shelli Beltran is Stacia Toombs.
+  Therefore, the context does provide a precise answer to the question.
+  ### JSON
+  {"Sufficient Context": 1}
+"""
+class SufficientContextAutoraterPrompt(LLMPrompt):
+  SUFFICIENT_CONTEXT_AUTORATOR_INSTURCTION = f"""
+    You are an expert LLM evaluator that excels at evaluating a QUESTION and REFERENCES.
+    Consider the following criteria:
+    Sufficient Context: 1 IF the CONTEXT is sufficient to infer the answer to the question and 0
+    IF the CONTEXT cannot be used to infer the answer to the question
+    First, output a list of step-by-step questions that would be used to arrive at a label for the criteria. 
+    Make sure to include questions about assumptions implicit in the QUESTION.
+    Next, answer each of the questions. Finally, use these answers to evaluate the criteria.
+    Output the ### EXPLANATION (Text). Then, use the EXPLANATION to output the ###EVALUATION (JSON)
+    Keep the ### EXPLANATION (Text) short. DO NOT include any additional information in ###EVALUATION (JSON).
+
+    Here is an example:
+    {{example}}
+
+    Now evaluate the given QUESTION and REFERENCES.
+    ### QUESTION
+    {{question}}
+    ### REFERENCES
+    {{evidence}}
+    """
+  def get_prompt(self, prolog_query: bool = False) -> PromptTemplate:
+      """Get the sufficient context autorater prompt template.
+
+      Args:
+          prolog_query: This parameter is not used for sufficient context autorater prompts, as they do not support Prolog query generation.
+
+      Returns:
+          A PromptTemplate object containing the sufficient context autorater prompt template.
+      """
+      return PromptTemplate(
+          input_variables=["example", "question", "evidence"],
+          template=self.SUFFICIENT_CONTEXT_AUTORATOR_INSTURCTION,
+      )
 
 ##### Zeroshot method
 class ZeroshotLLMPrompt(LLMPrompt):
