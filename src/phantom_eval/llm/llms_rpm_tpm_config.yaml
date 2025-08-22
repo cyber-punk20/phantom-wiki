@@ -44,6 +44,20 @@ gemini:
     usage_tier=1:
       RPM: 1000
       TPM: 4000000
+  gemini-2.0-flash:
+    usage_tier=0: # free tier
+      RPM: 15
+      TPM: 1000000
+    usage_tier=1:
+      RPM: 2000
+      TPM: 4000000
+  gemini-2.5-pro:
+    usage_tier=0: # free tier
+      RPM: 5
+      TPM: 250000
+    usage_tier=1:
+      RPM: 150
+      TPM: 2000000
   gemini-1.5-flash-8b-001:
     usage_tier=0: # free tier
       RPM: 15

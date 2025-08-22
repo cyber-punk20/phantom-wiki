@@ -418,7 +418,8 @@ class SufficientContextAutorater(Agent, RAGMixin):
             True if the context is sufficient, False otherwise.
         """
         self.agent_interactions.messages.append(
-            Message(role="assistant", content=[ContentTextMessage(text=response_text)])
+            Message(role="assistant", content=[ContentTextMessage(text=f"SAC round {self.step_round}"),
+                                               ContentTextMessage(text=response_text)])
         )
         try:
             # Find the JSON part of the response
