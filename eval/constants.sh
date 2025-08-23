@@ -102,4 +102,5 @@ METHODS=(
     "zeroshot-rag"
     "fewshot-rag"
     "cot-rag"
+    "sufficient-context-autorater"
 )

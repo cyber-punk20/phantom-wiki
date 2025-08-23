@@ -35,6 +35,9 @@ def get_parser() -> argparse.ArgumentParser:
         "--react_max_steps", type=int, default=50, help="Maximum number of steps for the ReAct/Act agent"
     )
     parser.add_argument(
+        "--sca_max_steps", type=int, default=2, help="Maximum number of steps for the sufficient context autorater"
+    )
+    parser.add_argument(
         "--sc_num_votes",
         type=int,
         default=5,

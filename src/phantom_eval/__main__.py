@@ -9,14 +9,14 @@ from pathlib import Path
 
 import pandas as pd
 
-from phantom_wiki.facts.database import Database
+# from phantom_wiki.facts.database import Database
 
 from . import constants, get_parser
 from ._types import Conversation, LLMChatResponse
 from .agents import get_agent
 from .agents.common import Agent
 from .llm import InferenceGenerationConfig, LLMChat, get_llm
-from .prolog_utils import get_prolog_results
+# from .prolog_utils import get_prolog_results
 from .prompts import (
     ACT_EXAMPLES,
     COT_EXAMPLES,
@@ -109,6 +109,15 @@ def get_agent_kwargs(args: argparse.Namespace) -> dict:
                 corpus_path=args.corpus_path,
                 cot_examples=COT_EXAMPLES,
             )
+        case "sufficient-context-autorater":
+            agent_kwargs = dict(
+                embedding_model_name=args.embedding_model_name,
+                retriever_num_documents=args.retriever_num_documents,
+                retrieval_method=args.retrieval_method,
+                index_path=args.index_path,
+                corpus_path=args.corpus_path,
+                sca_max_steps=args.sca_max_steps,
+            )
         case "react":
             agent_kwargs = dict(
                 max_steps=args.react_max_steps,
@@ -185,14 +194,14 @@ async def main(args: argparse.Namespace) -> None:
                 agent_kwargs=agent_kwargs,
             )
 
-            if args.prolog_query:
-                logger.info("Loading Prolog database")
-                # Create temporary file and load database from disk
-                with tempfile.NamedTemporaryFile(mode="w", suffix=".pl") as tmp:
-                    content = dataset["database"]["content"]
-                    tmp.write("\n".join(content))
-                    tmp.flush()
-                    db = Database.from_disk(tmp.name)
+            # if args.prolog_query:
+            #     logger.info("Loading Prolog database")
+            #     # Create temporary file and load database from disk
+            #     with tempfile.NamedTemporaryFile(mode="w", suffix=".pl") as tmp:
+            #         content = dataset["database"]["content"]
+            #         tmp.write("\n".join(content))
+            #         tmp.flush()
+            #         db = Database.from_disk(tmp.name)
 
             num_df_qa_pairs = len(df_qa_pairs)
             if args.inf_vllm_offline and args.method not in [
@@ -200,6 +209,7 @@ async def main(args: argparse.Namespace) -> None:
                 "act",
                 "react->cot-sc",
                 "cot-sc->react",
+                "sufficient-context-autorater",
             ]:
                 batch_size = num_df_qa_pairs
             else:
@@ -271,7 +281,7 @@ async def main(args: argparse.Namespace) -> None:
                         # prompt for the self-consistency methods, we save the Conversation object from the
                         # last iteration
                         agent_interactions: list[Conversation] = agent.agent_interactions
-                    case "react" | "act" | "react->cot-sc" | "cot-sc->react":
+                    case "react" | "act" | "react->cot-sc" | "cot-sc->react" | "sufficient-context-autorater":
                         # Run all agents in parallel using asyncio.gather
                         responses: list[LLMChatResponse] = []
                         inf_gen_config = default_inf_gen_config.model_copy(update=dict(seed=seed), deep=True)
@@ -292,10 +302,10 @@ async def main(args: argparse.Namespace) -> None:
 
                 # Process Prolog queries if needed
                 prolog_results = []
-                if args.prolog_query:
-                    prolog_results = get_prolog_results(
-                        responses, db, logger, args.log_level.upper() == "DEBUG"
-                    )
+                # if args.prolog_query:
+                #     prolog_results = get_prolog_results(
+                #         responses, db, logger, args.log_level.upper() == "DEBUG"
+                #     )
 
                 # Log the final answers for the batch
                 pred_path.parent.mkdir(parents=True, exist_ok=True)
@@ -357,6 +367,7 @@ def save_preds(
             "prolog_query": pred_query,
             "prolog_query_results": query_results if args.log_level.upper() == "DEBUG" else None,
             "error": responses[i].error,
+            "sca_signal": responses[i].sca_signal,
             "interaction": interactions[i].model_dump() if interactions else [],
             "metadata": {
                 "model": args.model_name,
@@ -387,7 +398,7 @@ if __name__ == "__main__":
             "When prolog_query is true, we can only evaluate one split at a time since only one Prolog "
             "database can be in memory at any given time due to limitations with pyswip"
         )
-    if args.method in ["zeroshot-rag", "fewshot-rag", "cot-rag"]:
+    if args.method in ["zeroshot-rag", "fewshot-rag", "cot-rag", "sufficient-context-autorater"]:
         if args.retrieval_method in ["bm25", "dense"]:
             assert (
                 args.index_path is not None

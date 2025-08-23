@@ -53,3 +53,4 @@ class LLMChatResponse(BaseModel):
     pred: str
     usage: dict
     error: str | None = None
+    sca_signal: bool | None = None 

@@ -13,7 +13,7 @@ from joblib import Memory, expires_after
 from nltk import CFG
 
 from phantom_wiki.facts.templates import QA_GRAMMAR_STRING, generate_templates, is_aggregation_question
-from phantom_wiki.utils.hf_datasets import PhantomWikiDatasetBuilder
+#from phantom_wiki.utils.hf_datasets import PhantomWikiDatasetBuilder
 
 memory = Memory("cachedir")
 

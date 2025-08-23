@@ -18,8 +18,8 @@ class LLMPrompt(abc.ABC):
             A PromptTemplate object containing the prompt template.
         """
 
-SUFFICIENT_CONTEXT_AUTORATOR_EXAMPLE = f"""
-  EXAMPLE:
+SUFFICIENT_CONTEXT_AUTORATER_EXAMPLES = f"""
+  ## EXAMPLE 1:
   ### QUESTION
   Who is the aunt of Vicki Hackworth?
   ### References
@@ -31,10 +31,12 @@ SUFFICIENT_CONTEXT_AUTORATOR_EXAMPLE = f"""
   The parents of Vicki Hackworth are Shelli Beltran, Dino Beltran. Dino Beltran has no sister, and the sister of Shelli Beltran is Stacia Toombs.
   Therefore, the context does provide a precise answer to the question.
   ### JSON
-  {"Sufficient Context": 1}
+  {{"Sufficient Context": 1}}
 """
+
+
 class SufficientContextAutoraterPrompt(LLMPrompt):
-  SUFFICIENT_CONTEXT_AUTORATOR_INSTURCTION = f"""
+  SUFFICIENT_CONTEXT_AUTORATER_INSTRUCTION = f"""
     You are an expert LLM evaluator that excels at evaluating a QUESTION and REFERENCES.
     Consider the following criteria:
     Sufficient Context: 1 IF the CONTEXT is sufficient to infer the answer to the question and 0
@@ -42,11 +44,11 @@ class SufficientContextAutoraterPrompt(LLMPrompt):
     First, output a list of step-by-step questions that would be used to arrive at a label for the criteria. 
     Make sure to include questions about assumptions implicit in the QUESTION.
     Next, answer each of the questions. Finally, use these answers to evaluate the criteria.
-    Output the ### EXPLANATION (Text). Then, use the EXPLANATION to output the ###EVALUATION (JSON)
-    Keep the ### EXPLANATION (Text) short. DO NOT include any additional information in ###EVALUATION (JSON).
+    Output the ### EXPLANATION (Text). Then, use the EXPLANATION to output the ### JSON.
+    Keep the ### EXPLANATION (Text) short. DO NOT include any additional information in ### JSON.
 
-    Here is an example:
-    {{example}}
+    Here are examples:
+    {{examples}}
 
     Now evaluate the given QUESTION and REFERENCES.
     ### QUESTION
@@ -65,7 +67,7 @@ class SufficientContextAutoraterPrompt(LLMPrompt):
       """
       return PromptTemplate(
           input_variables=["example", "question", "evidence"],
-          template=self.SUFFICIENT_CONTEXT_AUTORATOR_INSTURCTION,
+          template=self.SUFFICIENT_CONTEXT_AUTORATER_INSTRUCTION,
       )
 
 ##### Zeroshot method
@@ -944,5 +946,7 @@ def get_llm_prompt(method: str, model_name: str) -> LLMPrompt:
             return ReactLLMPrompt()
         case "act":
             return ActLLMPrompt()
+        case "sufficient-context-autorater":
+            return SufficientContextAutoraterPrompt()
         case _:
             raise ValueError(f"Method {method} not supported.")

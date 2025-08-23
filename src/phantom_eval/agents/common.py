@@ -28,7 +28,7 @@ from langchain_core.embeddings import Embeddings
 from phantom_eval._types import ContentTextMessage, Conversation, LLMChatResponse, Message
 from phantom_eval.gpu_utils import get_gpu_count
 from phantom_eval.llm import InferenceGenerationConfig, LLMChat, aggregate_usage
-from phantom_eval.prompts import LLMPrompt, SUFFICIENT_CONTEXT_AUTORATOR_EXAMPLE
+from phantom_eval.prompts import LLMPrompt, SUFFICIENT_CONTEXT_AUTORATER_EXAMPLES
 from phantom_eval.score import normalize_pred
 
 logger = logging.getLogger(__name__)
@@ -319,11 +319,8 @@ class RAGMixin:
             vectorstore = FAISS.from_texts(texts, embeddings)
             self.retriever = vectorstore.as_retriever(search_kwargs={"k": retriever_num_documents})
     
-    def get_RAG_evidence(self, question: str, step_round: int) -> str:
-        return self._get_RAG_evidence(question, self.retriever_num_documents * step_round) 
-    
-    def get_RAG_evidence(self, question: str) -> str:
-        return self._get_RAG_evidence(question, self.retriever_num_documents)
+    def get_RAG_evidence(self, question: str, step_round: int = 1) -> str:
+        return self._get_RAG_evidence(question, self.retriever_num_documents * step_round)
 
     def _get_RAG_evidence(self, question: str, retriever_num_documents: int) -> str:
         """
@@ -360,12 +357,14 @@ class SufficientContextAutorater(Agent, RAGMixin):
         self,
         text_corpus: pd.DataFrame,
         llm_prompt: LLMPrompt,
-        sufficient_context_example: str = SUFFICIENT_CONTEXT_AUTORATOR_EXAMPLE,
-        max_steps: int = 5,
+        sufficient_context_examples: str = SUFFICIENT_CONTEXT_AUTORATER_EXAMPLES,
+        sca_max_steps: int = 5,
         embedding_model_name: str = "",
         port: int = 8001,
         retriever_num_documents: int = 4,
-        retrieval_method: str = "bm25"
+        retrieval_method: str = "bm25",
+        index_path: str = None,
+        corpus_path: str = None,
     ):
         """
         Args:
@@ -396,9 +395,11 @@ class SufficientContextAutorater(Agent, RAGMixin):
             retriever_num_documents,
             port,
             retrieval_method,
+            index_path,
+            corpus_path,
         )
-        self.sufficient_context_example = sufficient_context_example
-        self.max_steps = max_steps
+        self.sufficient_context_examples = sufficient_context_examples
+        self.sca_max_steps = sca_max_steps
         self.reset()
 
     def reset(self) -> None:
@@ -446,7 +447,7 @@ class SufficientContextAutorater(Agent, RAGMixin):
         # Retrieve relevant context
         self.evidence = self.get_RAG_evidence(question, self.step_round)
         return self.llm_prompt.get_prompt().format(
-            evidence=self.evidence, example=self.sufficient_context_example, question=question
+            evidence=self.evidence, examples=self.sufficient_context_examples, question=question
         )
 
     async def _prompt_agent(
@@ -489,8 +490,11 @@ class SufficientContextAutorater(Agent, RAGMixin):
         **kwargs,
     ) -> LLMChatResponse:
         logger.debug(f"\n\t>>> question: {question}\n")
+        logger.debug(f"\n\t>>> sca_max_steps: {self.sca_max_steps}\n")
+
         total_usage: dict = {}
-        while (self.step_round <= self.max_steps) and (not self.finished):
+        while (self.step_round <= self.sca_max_steps) and (not self.finished):
+            logger.debug(f"\n\t>>> step_round: {self.step_round}\n")
             try:
                 response = await self._prompt_agent(llm_chat, question, inf_gen_config)
                 total_usage = aggregate_usage([total_usage, response.usage])
@@ -503,17 +507,10 @@ class SufficientContextAutorater(Agent, RAGMixin):
                     pred="", usage=total_usage, error=f"<agent_error>{traceback.format_exc()}</agent_error>"
                 )
                 break
+        logger.debug(f"\n\t>>> evidence:\n{self.evidence}\n")
+        logger.debug(f"\n\t>>> finished: {self.finished}\n")
+        logger.debug(f"\n\t>>> agent_interactions: {self.agent_interactions}\n")
+        logger.debug(f"\n\t>>> total_usage: {total_usage}\n")
+        logger.debug(f"\n\t>>> response: {response}\n")
 
-        if (self.step_round > self.max_steps) and (not self.finished):
-            response = LLMChatResponse(
-                pred="",
-                usage=total_usage,
-                error=f"<agent_error>SufficientContextAutorater: max act steps ({self.max_steps})"
-                "reached without finishing.</agent_error>",
-            )
-
-        return LLMChatResponse(pred=response.pred, usage=total_usage, error=response.error)
-
-
-
-
+        return LLMChatResponse(pred=self.evidence, usage=total_usage, sca_signal=self.finished)
