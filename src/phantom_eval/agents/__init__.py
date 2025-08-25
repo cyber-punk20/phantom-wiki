@@ -1,6 +1,6 @@
 import pandas as pd
 
-from phantom_eval.agents.cot import CoTAgent, CoTRAGAgent, CoTSCAgent
+from phantom_eval.agents.cot import CoTAgent, CoTRAGAgent, CoTSCAgent, CoTWithSCAAgent
 from phantom_eval.agents.common import Agent, SufficientContextAutorater
 from phantom_eval.agents.nshot import NshotAgent, NshotRAGAgent, NshotSCAgent
 from phantom_eval.agents.react import ActAgent, CoTSC_ReactAgent, React_CoTSCAgent, ReactAgent
@@ -13,6 +13,7 @@ SUPPORTED_METHOD_NAMES: list[str] = [
     "fewshot-sc",
     "cot",
     "cot-sc",
+    "cot-sca",
     "react",
     "act",
     "react->cot-sc",
@@ -42,6 +43,8 @@ def get_agent(
             return CoTAgent(text_corpus, llm_prompt, **agent_kwargs)
         case "cot-sc":
             return CoTSCAgent(text_corpus, llm_prompt, **agent_kwargs)
+        case "cot-sca":
+            return CoTWithSCAAgent(text_corpus, llm_prompt, **agent_kwargs)
         case "react":
             return ReactAgent(text_corpus, llm_prompt, **agent_kwargs)
         case "act":

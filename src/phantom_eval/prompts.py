@@ -938,7 +938,7 @@ def get_llm_prompt(method: str, model_name: str) -> LLMPrompt:
             return ZeroshotLLMPrompt()
         case "fewshot" | "fewshot-sc" | "fewshot-rag":
             return FewshotLLMPrompt()
-        case "cot" | "cot-sc" | "cot-sc->react" | "cot-rag":
+        case "cot" | "cot-sc" | "cot-sc->react" | "cot-rag" | "cot-sca":
             return CoTLLMPrompt()
         case "zeroshot-rag":
             return ZeroshotLLMPrompt()

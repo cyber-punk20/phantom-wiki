@@ -3,6 +3,7 @@ import asyncio
 import json
 import logging
 import math
+import os
 import tempfile
 from copy import deepcopy
 from pathlib import Path
@@ -73,6 +74,11 @@ def get_agent_kwargs(args: argparse.Namespace) -> dict:
                 prolog_query=args.prolog_query,
             )
         case "cot":
+            agent_kwargs = dict(
+                cot_examples=COT_EXAMPLES if not args.prolog_query else COT_EXAMPLES_PROLOG,
+                prolog_query=args.prolog_query,
+            )
+        case "cot-sca":
             agent_kwargs = dict(
                 cot_examples=COT_EXAMPLES if not args.prolog_query else COT_EXAMPLES_PROLOG,
                 prolog_query=args.prolog_query,
@@ -185,6 +191,15 @@ async def main(args: argparse.Namespace) -> None:
             df_qa_pairs = pd.DataFrame(dataset["qa_pairs"])
             df_text = pd.DataFrame(dataset["text"])
 
+            if args.method == "cot-sca":
+                if not args.sca_evidence_path:
+                    raise ValueError("`--sca_evidence_path` must be provided for `cot-sca` method.")
+                evidence_path = os.path.join(args.sca_evidence_path, f"{split}.jsonl")
+                logger.info(f"Loading SCA evidence from {evidence_path}")
+                df_text = pd.read_json(evidence_path, lines=True)
+            
+                
+
             # Construct agent for the data split
             agent_kwargs = get_agent_kwargs(args)
             agent: Agent = get_agent(
@@ -265,17 +280,20 @@ async def main(args: argparse.Namespace) -> None:
                     "fewshot-sc",
                     "fewshot-rag",
                     "cot",
+                    "cot-sca",
                     "cot-sc",
                     "cot-rag",
                 ]
                 match args.method:
                     case method if method in methods_with_batch_run:
                         questions: list[str] = batch_df_qa_pairs["question"].tolist()
+                        question_ids: list[str] = batch_df_qa_pairs["id"].tolist()
                         inf_gen_config = default_inf_gen_config.model_copy(update=dict(seed=seed), deep=True)
                         responses: list[LLMChatResponse] = await agent.batch_run(
                             llm_chat,
                             questions,
                             inf_gen_config,
+                            question_ids=question_ids,
                         )
                         # NOTE: the agent interactions are just single Conversation objects containing the
                         # prompt for the self-consistency methods, we save the Conversation object from the
@@ -292,6 +310,7 @@ async def main(args: argparse.Namespace) -> None:
                                     llm_chat,
                                     qa_sample.question,
                                     inf_gen_config,
+                                    question_id=qa_sample.id,
                                 )
                                 for agent, qa_sample in zip(agents, batch_df_qa_pairs.itertuples())
                             ]
