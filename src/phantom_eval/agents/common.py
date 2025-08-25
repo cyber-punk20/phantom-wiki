@@ -183,6 +183,28 @@ class RAGMixin:
     # implemented as a dict of text corpus id -> (retriever, tokenizer)
     _indices = {}
 
+    def __getstate__(self):
+        """Custom getstate to handle unpickleable retriever object."""
+        state = self.__dict__.copy()
+        if "retriever" in state:
+            del state["retriever"]
+        return state
+
+    def __setstate__(self, state):
+        """Custom setstate to handle unpickleable retriever object."""
+        self.__dict__.update(state)
+        # Re-initialize retriever. The logic in __init__ will handle caching.
+        RAGMixin.__init__(
+            self,
+            self.text_corpus,
+            self.embedding_model_name,
+            self.retriever_num_documents,
+            self.port,
+            self.retrieval_method,
+            self.index_path,
+            self.corpus_path,
+        )
+
     def __init__(
         self,
         text_corpus: pd.DataFrame,
@@ -224,6 +246,10 @@ class RAGMixin:
         self.embedding_model_name = embedding_model_name
         self.retriever_num_documents = retriever_num_documents
         self.retrieval_method = retrieval_method
+        self.text_corpus = text_corpus
+        self.index_path = index_path
+        self.corpus_path = corpus_path
+        self.port = port
 
         # TODO: deprecate the text_corpus argument. The new workflow is to index the text corpus separately,
         # then pass the index path to the constructor.
