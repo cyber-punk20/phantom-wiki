@@ -57,7 +57,14 @@ def get_agent_kwargs(args: argparse.Namespace) -> dict:
     match args.method:
         case "zeroshot":
             agent_kwargs = dict(prolog_query=args.prolog_query)
+        case "zeroshot-sca":
+            agent_kwargs = dict(prolog_query=args.prolog_query)
         case "fewshot":
+            agent_kwargs = dict(
+                fewshot_examples=FEWSHOT_EXAMPLES if not args.prolog_query else FEWSHOT_EXAMPLES_PROLOG,
+                prolog_query=args.prolog_query,
+            )
+        case "fewshot-sca":
             agent_kwargs = dict(
                 fewshot_examples=FEWSHOT_EXAMPLES if not args.prolog_query else FEWSHOT_EXAMPLES_PROLOG,
                 prolog_query=args.prolog_query,
@@ -191,9 +198,9 @@ async def main(args: argparse.Namespace) -> None:
             df_qa_pairs = pd.DataFrame(dataset["qa_pairs"])
             df_text = pd.DataFrame(dataset["text"])
 
-            if args.method == "cot-sca":
+            if args.method == "cot-sca" or args.method == "zeroshot-sca" or args.method == "fewshot-sca":
                 if not args.sca_evidence_path:
-                    raise ValueError("`--sca_evidence_path` must be provided for `cot-sca` method.")
+                    raise ValueError("`--sca_evidence_path` must be provided for `cot-sca`/`zeroshot-sca`/`fewshot-sca` method.")
                 evidence_path = os.path.join(args.sca_evidence_path, f"{split}.jsonl")
                 logger.info(f"Loading SCA evidence from {evidence_path}")
                 df_text = pd.read_json(evidence_path, lines=True)
@@ -274,10 +281,12 @@ async def main(args: argparse.Namespace) -> None:
                 agent_interactions = None
                 methods_with_batch_run = [
                     "zeroshot",
+                    "zeroshot-sca",
                     "zeroshot-sc",
                     "zeroshot-rag",
                     "fewshot",
                     "fewshot-sc",
+                    "fewshot-sca",
                     "fewshot-rag",
                     "cot",
                     "cot-sca",
