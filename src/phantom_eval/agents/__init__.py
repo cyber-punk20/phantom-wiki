@@ -1,6 +1,6 @@
 import pandas as pd
 
-from phantom_eval.agents.common import Agent, SufficientContextAutorater
+from phantom_eval.agents.common import Agent, SufficientContextAutorater, LLMReranker
 from phantom_eval.agents.cot import CoTAgent, CoTRAGAgent, CoTSCAgent, CoTWithSCAAgent
 from phantom_eval.agents.nshot import NshotAgent, NshotRAGAgent, NshotSCAgent, NshotWithSCAAgent
 from phantom_eval.agents.react import ActAgent, CoTSC_ReactAgent, React_CoTSCAgent, ReactAgent
@@ -63,5 +63,7 @@ def get_agent(
             return CoTRAGAgent(text_corpus, llm_prompt, **agent_kwargs)
         case "sufficient-context-autorater":
             return SufficientContextAutorater(text_corpus, llm_prompt, **agent_kwargs)
+        case "llm-reranker":
+            return LLMReranker(text_corpus, llm_prompt, **agent_kwargs)
         case _:
             raise ValueError(f"Invalid method: {method}")

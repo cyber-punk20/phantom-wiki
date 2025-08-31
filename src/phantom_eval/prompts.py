@@ -138,7 +138,7 @@ The gender of Dino Beltran is male.
 
 
 ### EVALUATION
-{{"rankings" = ["Vicki Hackworth", "Shelli Beltran", "Dino Beltran", "Aida Wang"]}}
+{{"rankings": ["Vicki Hackworth", "Shelli Beltran", "Dino Beltran", "Aida Wang"]}}
 """
 
 """
@@ -147,7 +147,7 @@ In the dataset, the names are unique. Use name as identifer for each evidence.
 class RerankerLLMPrompt(LLMPrompt):
     RERANKER_INSTRUCTION = f"""
     You are an expert LLM evaluator that excels at evaluating a QUESTION and REFERENCES. Consider the following criteria:
-    A REFERENCE is the most relevant if it directly contains an answer to the question, and it should be first or near the front of the list. A REFERENCE is also relevant if it contains supporting information or can help in answering the question. A REFERENCE that does not contain helpful information for the question or is off-topic for the question should be ranked near the end of the list. Use the title for the REFERENCE to populate the output list, where the list should start with the most relevant REFERENCE and end with the least relevant REFERENCE. Include each id exactly once in the output list.
+    A REFERENCE is the most relevant if it directly contains an answer to the question, and it should be first or near the front of the list. A REFERENCE is also relevant if it contains supporting information or can help in answering the question. A REFERENCE that does not contain helpful information for the question or is off-topic for the question should be ranked near the end of the list. Use the title for the REFERENCE to populate the output list, where the list should start with the most relevant REFERENCE and end with the least relevant REFERENCE. Include each title exactly once in the output list. Output the ### EVALUATION.
 
     EXAMPLE:
     {{example}}
@@ -1050,5 +1050,7 @@ def get_llm_prompt(method: str, model_name: str) -> LLMPrompt:
             return ActLLMPrompt()
         case "sufficient-context-autorater":
             return SufficientContextAutoraterPrompt()
+        case "llm-reranker":
+            return RerankerLLMPrompt()
         case _:
             raise ValueError(f"Method {method} not supported.")
