@@ -212,6 +212,13 @@ async def main(args: argparse.Namespace) -> None:
                 logger.info(f"Loading SCA evidence from {evidence_path}")
                 df_text = pd.read_json(evidence_path, lines=True)
             
+            if args.method == "cot-reranker" or args.method == "zeroshot-reranker" or args.method == "fewshot-reranker":
+                if not args.reranker_evidence_path:
+                    raise ValueError("`--reranker_evidence_path` must be provided for `cot-reranker`/`zeroshot-reranker`/`fewshot-reranker` method.")
+                evidence_path = os.path.join(args.reranker_evidence_path, f"{split}.jsonl")
+                logger.info(f"Loading reranker evidence from {evidence_path}")
+                df_text = pd.read_json(evidence_path, lines=True)
+            
                 
 
             # Construct agent for the data split
@@ -293,14 +300,18 @@ async def main(args: argparse.Namespace) -> None:
                     "zeroshot-sca",
                     "zeroshot-sc",
                     "zeroshot-rag",
+                    "zeroshot-reranker",
                     "fewshot",
                     "fewshot-sc",
                     "fewshot-sca",
                     "fewshot-rag",
+                    "fewshot-reranker",
                     "cot",
                     "cot-sca",
                     "cot-sc",
                     "cot-rag",
+                    "cot-reranker",
+                    "sufficient-context-autorater",
                     "llm-reranker",
                     "llm-rag-reranker",
                 ]

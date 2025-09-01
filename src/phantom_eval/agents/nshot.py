@@ -304,6 +304,150 @@ class NshotWithSCAAgent(NshotAgent):
         else:
             return pred
 
+class NshotWithLLMRankerAgent(NshotAgent):
+    """
+    Agent to implement n-shot evaluation with LLM Ranker.
+    """
+    def __init__(
+        self,
+        text_corpus: pd.DataFrame,
+        llm_prompt: LLMPrompt,
+        fewshot_examples: str = "",
+        prolog_query: bool = False,
+    ):
+        """
+        Args:
+            text_corpus (pd.DataFrame): The text corpus to search for answers.
+                Must contain two columns: 'title' and 'article'.
+            llm_prompt (LLMPrompt): The prompt to be used by the agent.
+            fewshot_examples (str): Few-shot prompt examples to include in agent prompt.
+                If "", the agent is zero-shot. Defaults to "".
+            prolog_query (bool): Whether to use the prompt for eliciting prolog queries from LLMs.
+                Passed on to `LLMPrompt.get_prompt()`. Defaults to False.
+        """
+        super().__init__(text_corpus, llm_prompt)
+        self.fewshot_examples = fewshot_examples
+        self.prolog_query = prolog_query
+
+    def _build_agent_prompt(self, question: str, question_id: str) -> str:
+        # Use .loc for efficient and explicit selection.
+        evidence_series = self.text_corpus.loc[self.text_corpus["id"] == question_id, "pred"]
+        if evidence_series.empty:
+            logger.warning(f"No evidence found in text_corpus for question_id: {question_id}")
+            raise ValueError(f"No evidence found in text_corpus for question_id: {question_id}")
+        else:
+            # .iloc[0] extracts the first (and only) item from the Series as a string.
+            evidence = evidence_series.iloc[0]
+        return self.combine_evidence_and_question(evidence, question)
+    
+    def combine_evidence_and_question(self, evidence: str, question: str) -> str:
+        """
+        Combine the evidence and question to form the agent prompt using `self.llm_prompt`.
+        """
+        if self.fewshot_examples:  # Few-shot
+            return self.llm_prompt.get_prompt(self.prolog_query).format(
+                evidence=evidence, examples=self.fewshot_examples, question=question
+            )
+        else:  # Zero-shot
+            return self.llm_prompt.get_prompt(self.prolog_query).format(evidence=evidence, question=question)
+
+    async def run(
+        self,
+        llm_chat: LLMChat,
+        question: str,
+        inf_gen_config: InferenceGenerationConfig,
+        *args,
+        **kwargs,
+    ) -> LLMChatResponse:
+        question_id = kwargs.get("question_id")
+        if not question_id:
+            raise ValueError("`question_id` must be provided in kwargs for NshotWithSCAAgent.run()")
+
+        logger.debug(f"\n\t>>> question: {question}\n")
+
+        # Create a conversation with 1 user prompt and initialize agent interactions
+        prompt = self._build_agent_prompt(question, question_id)
+        conv = Conversation(messages=[Message(role="user", content=[ContentTextMessage(text=prompt)])])
+        self.agent_interactions = conv
+
+        # Generate response
+        inf_gen_config = inf_gen_config.model_copy(update=dict(stop_sequences=[]), deep=True)
+        response = await llm_chat.generate_response(conv, inf_gen_config)
+
+        # Update agent's conversation
+        self.agent_interactions.messages.append(
+            Message(role="assistant", content=[ContentTextMessage(text=response.pred)])
+        )
+
+        if self.prolog_query:
+            response.pred = parse_prolog_query(response.pred)
+            return response
+
+        try:
+            pred = NshotAgent.parse_answer(response.pred)
+            error = None
+        except Exception as e:
+            pred = ""
+            error = f"<agent_error>{traceback.format_exc()}</agent_error>"
+            error = f"<agent_error>{e}</agent_error>"
+        return LLMChatResponse(pred=pred, usage=response.usage, error=error)
+
+    async def batch_run(
+        self,
+        llm_chat: LLMChat,
+        questions: list[str],
+        inf_gen_config: InferenceGenerationConfig,
+        *args,
+        **kwargs,
+    ) -> list[LLMChatResponse]:
+        question_ids = kwargs.get("question_ids")
+        if not question_ids:
+            raise ValueError("`question_ids` must be provided in kwargs for NshotWithSCAAgent.batch_run()")
+
+        # Create a conversation for each user prompt, and initialize agent interactions
+        prompts: list[str] = [self._build_agent_prompt(q, qid) for q, qid in zip(questions, question_ids)]
+        convs = [
+            Conversation(messages=[Message(role="user", content=[ContentTextMessage(text=prompt)])])
+            for prompt in prompts
+        ]
+        self.agent_interactions = convs
+
+        # Generate response
+        inf_gen_config = inf_gen_config.model_copy(update=dict(stop_sequences=[]), deep=True)
+        responses = await llm_chat.batch_generate_response(convs, inf_gen_config)
+
+        # Add the responses to the agent's conversations
+        for i, response in enumerate(responses):
+            self.agent_interactions[i].messages.append(
+                Message(role="assistant", content=[ContentTextMessage(text=response.pred)])
+            )
+            if self.prolog_query:
+                responses[i].pred = parse_prolog_query(response.pred)
+
+        parsed_responses: list[LLMChatResponse] = []
+        for response in responses:
+            try:
+                pred = NshotAgent.parse_answer(response.pred)
+                error = None
+            except Exception as e:
+                pred = ""
+                error = f"<agent_error>{traceback.format_exc()}</agent_error>"
+                error = f"<agent_error>{e}</agent_error>"
+            parsed_responses.append(LLMChatResponse(pred=pred, usage=response.usage, error=error))
+        return parsed_responses
+    @classmethod
+    def parse_answer(cls, pred: str) -> str:
+        """
+        Parse the response to extract the answer using regex.
+        First try to parse the response as a thinking answer (of the form: "</think> ...").
+        If it fails, then return the original response.
+        """
+        pattern = r"</think>\s*(.+)"
+        m = re.search(pattern, pred)
+        if m:
+            return m.group(1)
+        else:
+            return pred
 
 class NshotSCAgent(NshotAgent, SCMixin):
     """
@@ -420,78 +564,79 @@ class NshotRAGAgent(NshotAgent, RAGMixin):
         evidence = self.get_RAG_evidence(question)
         return self.combine_evidence_and_question(evidence, question)
 
-class NshotLLMRerankerAgent(NshotAgent, LLMReranker):
-    """
-    Agent to implement zeroshot-reranker and fewshot-reranker evaluation
-    """
 
-    def __init__(
-        self,
-        text_corpus: pd.DataFrame,
-        llm_prompt: LLMPrompt,
-        reranker_llm_prompt: LLMPrompt = get_llm_prompt("llm-reranker", "gemini-2.0-flash"),
-        fewshot_examples: str = "",
-        prolog_query: bool = False,
-    ):
-        """
-        Args:
-            text_corpus (pd.DataFrame): The text corpus to search for answers.
-                Must contain two columns: 'title' and 'article'.
-            llm_prompt (LLMPrompt): The prompt to be used by the agent.
-            fewshot_examples (str): Few-shot prompt examples to include in agent prompt.
-                If "", the agent is zero-shot. Defaults to "".
-        """
-        if not reranker_llm_prompt:
-            raise ValueError("reranker_llm_prompt must be provided")
-        NshotAgent.__init__(self, text_corpus, llm_prompt, fewshot_examples, prolog_query)
-        LLMReranker.__init__(self, text_corpus, reranker_llm_prompt)
+# class NshotLLMRerankerAgent(NshotAgent, LLMReranker):
+#     """
+#     Agent to implement zeroshot-reranker and fewshot-reranker evaluation
+#     """
 
-    def build_agent_prompt(self, question: str, reranker_result: list[str]) -> str:
-        """
-        Override the method in NshotAgent to use LLMReranker to create evidence.
-        """
-        evidence = rerank_evidence(self.text_corpus, reranker_result)
-        return self.combine_evidence_and_question(evidence, question)
+#     def __init__(
+#         self,
+#         text_corpus: pd.DataFrame,
+#         llm_prompt: LLMPrompt,
+#         reranker_llm_prompt: LLMPrompt = get_llm_prompt("llm-reranker", "gemini-2.0-flash"),
+#         fewshot_examples: str = "",
+#         prolog_query: bool = False,
+#     ):
+#         """
+#         Args:
+#             text_corpus (pd.DataFrame): The text corpus to search for answers.
+#                 Must contain two columns: 'title' and 'article'.
+#             llm_prompt (LLMPrompt): The prompt to be used by the agent.
+#             fewshot_examples (str): Few-shot prompt examples to include in agent prompt.
+#                 If "", the agent is zero-shot. Defaults to "".
+#         """
+#         if not reranker_llm_prompt:
+#             raise ValueError("reranker_llm_prompt must be provided")
+#         NshotAgent.__init__(self, text_corpus, llm_prompt, fewshot_examples, prolog_query)
+#         LLMReranker.__init__(self, text_corpus, reranker_llm_prompt)
+
+#     def build_agent_prompt(self, question: str, reranker_result: list[str]) -> str:
+#         """
+#         Override the method in NshotAgent to use LLMReranker to create evidence.
+#         """
+#         evidence = rerank_evidence(self.text_corpus, reranker_result)
+#         return self.combine_evidence_and_question(evidence, question)
     
-    async def run(
-        self, llm_chat: LLMChat, question: str, inf_gen_config: InferenceGenerationConfig, *args, **kwargs
-    ) -> LLMChatResponse:
-        # Get Reranker Response
-        reranker_llm_chat = kwargs.get("reranker_llm_chat")
-        if not reranker_llm_chat:
-            raise ValueError("reranker_llm_chat must be provided in kwargs for NshotLLMRerankerAgent.run()")
-        reranker_response = await LLMReranker.run(self, reranker_llm_chat, question, inf_gen_config, *args, **kwargs)
-        logger.debug(f"Reranker Response: {reranker_response}")
-        self.agent_interactions = reranker_response.convs
-        reranker_result = parse_llm_reranker_response(reranker_response.pred)
-        if reranker_result is None:
-            return LLMChatResponse(pred="", usage=reranker_response.usage, error="LLM Reranker response is empty.")
+#     async def run(
+#         self, llm_chat: LLMChat, question: str, inf_gen_config: InferenceGenerationConfig, *args, **kwargs
+#     ) -> LLMChatResponse:
+#         # Get Reranker Response
+#         reranker_llm_chat = kwargs.get("reranker_llm_chat")
+#         if not reranker_llm_chat:
+#             raise ValueError("reranker_llm_chat must be provided in kwargs for NshotLLMRerankerAgent.run()")
+#         reranker_response = await LLMReranker.run(self, reranker_llm_chat, question, inf_gen_config, *args, **kwargs)
+#         logger.debug(f"Reranker Response: {reranker_response}")
+#         self.agent_interactions = reranker_response.convs
+#         reranker_result = parse_llm_reranker_response(reranker_response.pred)
+#         if reranker_result is None:
+#             return LLMChatResponse(pred="", usage=reranker_response.usage, error="LLM Reranker response is empty.")
         
-        prompt = self.build_agent_prompt(question, reranker_result)
-        self.agent_interactions.messages.append(
-            Message(role="user", content=[ContentTextMessage(text=prompt)]))
+#         prompt = self.build_agent_prompt(question, reranker_result)
+#         self.agent_interactions.messages.append(
+#             Message(role="user", content=[ContentTextMessage(text=prompt)]))
         
-        # Generate response
-        inf_gen_config = inf_gen_config.model_copy(update=dict(stop_sequences=[]), deep=True)
-        response = await llm_chat.generate_response(self.agent_interactions, inf_gen_config)
+#         # Generate response
+#         inf_gen_config = inf_gen_config.model_copy(update=dict(stop_sequences=[]), deep=True)
+#         response = await llm_chat.generate_response(self.agent_interactions, inf_gen_config)
 
-        # Update agent's conversation
-        self.agent_interactions.messages.append(
-            Message(role="assistant", content=[ContentTextMessage(text=response.pred)])
-        )
+#         # Update agent's conversation
+#         self.agent_interactions.messages.append(
+#             Message(role="assistant", content=[ContentTextMessage(text=response.pred)])
+#         )
 
-        if self.prolog_query:
-            response.pred = parse_prolog_query(response.pred)
-            return response
+#         if self.prolog_query:
+#             response.pred = parse_prolog_query(response.pred)
+#             return response
 
-        try:
-            pred = NshotAgent.parse_answer(response.pred)
-            error = None
-        except Exception as e:
-            pred = ""
-            error = f"<agent_error>{traceback.format_exc()}</agent_error>"
-            error = f"<agent_error>{e}</agent_error>"
-        return LLMChatResponse(pred=pred, usage=response.usage, error=error, reranker_result=reranker_result)
+#         try:
+#             pred = NshotAgent.parse_answer(response.pred)
+#             error = None
+#         except Exception as e:
+#             pred = ""
+#             error = f"<agent_error>{traceback.format_exc()}</agent_error>"
+#             error = f"<agent_error>{e}</agent_error>"
+#         return LLMChatResponse(pred=pred, usage=response.usage, error=error, reranker_result=reranker_result)
     
-    async def batch_run(self, llm_chat, questions, inf_gen_config, *args, **kwargs):
-        raise NotImplementedError("Batch run is not supported for NshotLLMRerankerAgent.")
+#     async def batch_run(self, llm_chat, questions, inf_gen_config, *args, **kwargs):
+#         raise NotImplementedError("Batch run is not supported for NshotLLMRerankerAgent.")
