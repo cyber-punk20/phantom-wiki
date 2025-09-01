@@ -59,12 +59,19 @@ def get_agent_kwargs(args: argparse.Namespace) -> dict:
             agent_kwargs = dict(prolog_query=args.prolog_query)
         case "zeroshot-sca":
             agent_kwargs = dict(prolog_query=args.prolog_query)
+        case "zeroshot-reranker":
+            agent_kwargs = dict(prolog_query=args.prolog_query)
         case "fewshot":
             agent_kwargs = dict(
                 fewshot_examples=FEWSHOT_EXAMPLES if not args.prolog_query else FEWSHOT_EXAMPLES_PROLOG,
                 prolog_query=args.prolog_query,
             )
         case "fewshot-sca":
+            agent_kwargs = dict(
+                fewshot_examples=FEWSHOT_EXAMPLES if not args.prolog_query else FEWSHOT_EXAMPLES_PROLOG,
+                prolog_query=args.prolog_query,
+            )
+        case "fewshot-reranker":
             agent_kwargs = dict(
                 fewshot_examples=FEWSHOT_EXAMPLES if not args.prolog_query else FEWSHOT_EXAMPLES_PROLOG,
                 prolog_query=args.prolog_query,
@@ -232,6 +239,8 @@ async def main(args: argparse.Namespace) -> None:
                 "react->cot-sc",
                 "cot-sc->react",
                 "sufficient-context-autorater",
+                "zeroshot-reranker",
+                "fewshot-reranker",
             ]:
                 batch_size = num_df_qa_pairs
             else:
@@ -292,6 +301,7 @@ async def main(args: argparse.Namespace) -> None:
                     "cot-sca",
                     "cot-sc",
                     "cot-rag",
+                    "llm-reranker"
                 ]
                 match args.method:
                     case method if method in methods_with_batch_run:
@@ -308,11 +318,15 @@ async def main(args: argparse.Namespace) -> None:
                         # prompt for the self-consistency methods, we save the Conversation object from the
                         # last iteration
                         agent_interactions: list[Conversation] = agent.agent_interactions
-                    case "react" | "act" | "react->cot-sc" | "cot-sc->react" | "sufficient-context-autorater":
+                    case "react" | "act" | "react->cot-sc" | "cot-sc->react" | "sufficient-context-autorater" | "zeroshot-reranker" | "fewshot-reranker":
                         # Run all agents in parallel using asyncio.gather
                         responses: list[LLMChatResponse] = []
                         inf_gen_config = default_inf_gen_config.model_copy(update=dict(seed=seed), deep=True)
                         agents = [deepcopy(agent) for _ in range(batch_size)]
+                        agent_kwargs = {}
+                        if args.method == "zeroshot-reranker" or args.method == "fewshot-reranker":
+                            agent_kwargs["reranker_llm_chat"] =get_llm("gemini", "gemini-2.0-flash", model_kwargs={})
+
                         responses = await asyncio.gather(
                             *[
                                 agent.run(
@@ -320,6 +334,7 @@ async def main(args: argparse.Namespace) -> None:
                                     qa_sample.question,
                                     inf_gen_config,
                                     question_id=qa_sample.id,
+                                    **agent_kwargs
                                 )
                                 for agent, qa_sample in zip(agents, batch_df_qa_pairs.itertuples())
                             ]

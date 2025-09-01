@@ -14,7 +14,7 @@ class ContentTextMessage(BaseModel):
 
 
 class Message(BaseModel):
-    role: Literal["user", "assistant"]
+    role: Literal["user", "assistant", "llm-reranker"]
     content: list[ContentTextMessage]
 
 
@@ -53,4 +53,6 @@ class LLMChatResponse(BaseModel):
     pred: str
     usage: dict
     error: str | None = None
-    sca_signal: bool | None = None 
+    sca_signal: bool | None = None
+    reranker_result: list[str] | None = None
+    convs: list[Conversation] | Conversation | None = None

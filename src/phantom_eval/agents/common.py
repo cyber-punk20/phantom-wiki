@@ -543,7 +543,7 @@ class SufficientContextAutorater(Agent, RAGMixin):
 
 
 
-class LLMReranker(Agent, RAGMixin):
+class LLMReranker():
     def __init__(
             self, 
             text_corpus: pd.DataFrame, 
@@ -557,16 +557,17 @@ class LLMReranker(Agent, RAGMixin):
             llm_prompt (LLMPrompt): The prompt to be used by the agent.
             reranker_llm_example (str): Prompt examples to include in agent prompt.
         """
-        super().__init__(text_corpus, llm_prompt)
+        self.reranker_text_corpus = text_corpus
+        self.reranker_llm_prompt = llm_prompt
         self.reranker_llm_example = reranker_llm_example
     
-    def combine_evidence_and_question(self, evidence: str, question: str) -> str:
-        return self.llm_prompt.get_prompt().format(evidence=evidence, question=question, example=self.reranker_llm_example)
+    def combine_llm_reranker_evidence_and_question(self, evidence: str, question: str) -> str:
+        return self.reranker_llm_prompt.get_prompt().format(evidence=evidence, question=question, example=self.reranker_llm_example)
     
-    def _build_agent_prompt(self, question: str) -> str:
+    def build_llm_reranker_agent_prompt(self, question: str) -> str:
         # Retrieve relevant context
-        evidence = get_all_evidence(self.text_corpus)
-        return self.combine_evidence_and_question(evidence, question)
+        evidence = get_all_evidence(self.reranker_text_corpus)
+        return self.combine_llm_reranker_evidence_and_question(evidence, question)
     
     async def run(
         self,
@@ -577,19 +578,21 @@ class LLMReranker(Agent, RAGMixin):
         **kwargs,
     ) -> LLMChatResponse:
         logger.debug(f"\n\t>>> question: {question}\n")
-        prompt = self._build_agent_prompt(question)
+        prompt = self.build_llm_reranker_agent_prompt(question)
         conv = Conversation(messages=[Message(role="user", content=[ContentTextMessage(text=prompt)])])
         self.agent_interactions = conv
 
         # Generate response
         inf_gen_config = inf_gen_config.model_copy(update=dict(stop_sequences=[]), deep=True)
         response = await llm_chat.generate_response(conv, inf_gen_config)
+        logger.debug(f"\n\t>>>LLMReranker response: {response}\n")
+
 
         # Update agent's conversation
         self.agent_interactions.messages.append(
             Message(role="assistant", content=[ContentTextMessage(text=str(response.pred))])
         )
-        return LLMChatResponse(pred=str(response.pred), usage=response.usage)
+        return LLMChatResponse(pred=str(response.pred), usage=response.usage, convs=self.agent_interactions)
     
     async def batch_run(
         self,
@@ -602,7 +605,7 @@ class LLMReranker(Agent, RAGMixin):
         logger.debug(f"\n\t>>> questions: {questions}\n")
 
         # Create a conversation for each user prompt, and initialize agent interactions
-        prompts: list[str] = [self._build_agent_prompt(question) for question in questions]
+        prompts: list[str] = [self.build_llm_reranker_agent_prompt(question) for question in questions]
         convs = [
             Conversation(messages=[Message(role="user", content=[ContentTextMessage(text=prompt)])])
             for prompt in prompts
@@ -618,7 +621,7 @@ class LLMReranker(Agent, RAGMixin):
             self.agent_interactions[i].messages.append(
                 Message(role="assistant", content=[ContentTextMessage(text=response.pred)])
             )
-        return [LLMChatResponse(pred=response.pred, usage=response.usage) for response in responses]
+        return [LLMChatResponse(pred=response.pred, usage=response.usage, convs=self.agent_interactions) for response in responses]
 
 
 def parse_llm_reranker_response(response_text: str) -> list[str]:
