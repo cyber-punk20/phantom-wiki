@@ -301,7 +301,8 @@ async def main(args: argparse.Namespace) -> None:
                     "cot-sca",
                     "cot-sc",
                     "cot-rag",
-                    "llm-reranker"
+                    "llm-reranker",
+                    "llm-rag-reranker",
                 ]
                 match args.method:
                     case method if method in methods_with_batch_run:

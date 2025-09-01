@@ -96,6 +96,7 @@ METHODS=(
     "zeroshot-reranker"
     "fewshot-reranker"
     "llm-reranker"
+    "llm-rag-reranker"
     "cot"
     "cot-sc"
     "react"

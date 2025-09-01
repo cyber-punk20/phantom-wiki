@@ -1050,7 +1050,7 @@ def get_llm_prompt(method: str, model_name: str) -> LLMPrompt:
             return ActLLMPrompt()
         case "sufficient-context-autorater":
             return SufficientContextAutoraterPrompt()
-        case "llm-reranker":
+        case "llm-reranker" | "llm-rag-reranker":
             return RerankerLLMPrompt()
         case _:
             raise ValueError(f"Method {method} not supported.")
