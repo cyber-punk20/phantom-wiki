@@ -99,6 +99,7 @@ METHODS=(
     "llm-rag-reranker"
     "cot"
     "cot-sc"
+    "cot-reranker"
     "react"
     "act"
     "react->cot-sc"

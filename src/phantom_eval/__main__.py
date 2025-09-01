@@ -97,6 +97,11 @@ def get_agent_kwargs(args: argparse.Namespace) -> dict:
                 cot_examples=COT_EXAMPLES if not args.prolog_query else COT_EXAMPLES_PROLOG,
                 prolog_query=args.prolog_query,
             )
+        case "cot-reranker":
+            agent_kwargs = dict(
+                cot_examples=COT_EXAMPLES if not args.prolog_query else COT_EXAMPLES_PROLOG,
+                prolog_query=args.prolog_query,
+            )
         case "cot-sc":
             agent_kwargs = dict(
                 cot_examples=COT_EXAMPLES,
@@ -248,6 +253,7 @@ async def main(args: argparse.Namespace) -> None:
                 "sufficient-context-autorater",
                 "zeroshot-reranker",
                 "fewshot-reranker",
+                "cot-reranker",
             ]:
                 batch_size = num_df_qa_pairs
             else:
@@ -301,6 +307,7 @@ async def main(args: argparse.Namespace) -> None:
                     "zeroshot-sc",
                     "zeroshot-rag",
                     "zeroshot-reranker",
+                    "cot-reranker",
                     "fewshot",
                     "fewshot-sc",
                     "fewshot-sca",
@@ -330,14 +337,11 @@ async def main(args: argparse.Namespace) -> None:
                         # prompt for the self-consistency methods, we save the Conversation object from the
                         # last iteration
                         agent_interactions: list[Conversation] = agent.agent_interactions
-                    case "react" | "act" | "react->cot-sc" | "cot-sc->react" | "sufficient-context-autorater" | "zeroshot-reranker" | "fewshot-reranker":
+                    case "react" | "act" | "react->cot-sc" | "cot-sc->react" | "sufficient-context-autorater":
                         # Run all agents in parallel using asyncio.gather
                         responses: list[LLMChatResponse] = []
                         inf_gen_config = default_inf_gen_config.model_copy(update=dict(seed=seed), deep=True)
                         agents = [deepcopy(agent) for _ in range(batch_size)]
-                        agent_kwargs = {}
-                        if args.method == "zeroshot-reranker" or args.method == "fewshot-reranker":
-                            agent_kwargs["reranker_llm_chat"] =get_llm("gemini", "gemini-2.0-flash", model_kwargs={})
 
                         responses = await asyncio.gather(
                             *[
@@ -346,7 +350,6 @@ async def main(args: argparse.Namespace) -> None:
                                     qa_sample.question,
                                     inf_gen_config,
                                     question_id=qa_sample.id,
-                                    **agent_kwargs
                                 )
                                 for agent, qa_sample in zip(agents, batch_df_qa_pairs.itertuples())
                             ]
