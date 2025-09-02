@@ -69,6 +69,104 @@ class SufficientContextAutoraterPrompt(LLMPrompt):
           input_variables=["example", "question", "evidence"],
           template=self.SUFFICIENT_CONTEXT_AUTORATER_INSTRUCTION,
       )
+  
+CONTEXT_FILTER_LLM_EXAMPLE = f"""
+### QUESTION
+Who is the aunt of Vicki Hackworth?
+
+
+### REFERENCES
+# Aida Wang 
+## Family 
+The sisters of Aida Wang are Barabara Beltran, Vicki Hackworth. 
+The mother of Aida Wang is Shelli Beltran. 
+The father of Aida Wang is Dino Beltran. 
+The son of Aida Wang is Alfredo Wang. The daughter of Aida Wang is Cortney Parmer. 
+The husband of Aida Wang is Ryan Wang. 
+## Friends 
+The friends of Aida Wang are Lonny Parmer, Orlando Beltran, Tyson Woodson. ## Attributes 
+The date of birth of Aida Wang is 0985-05-30. 
+The occupation of Aida Wang is personal assistant. 
+The hobby of Aida Wang is meditation. 
+The gender of Aida Wang is female.
+================\n\n
+# Vicki Hackworth 
+## Family 
+The sisters of Vicki Hackworth are Aida Wang, Barabara Beltran.  
+The mother of Vicki Hackworth is Shelli Beltran.  
+The father of Vicki Hackworth is Dino Beltran.  
+The son of Vicki Hackworth is Virgil Hackworth.  
+The daughters of Vicki Hackworth are Leeann Hackworth, Leisa Lutz.  
+The husband of Vicki Hackworth is Ricardo Hackworth.  
+## Friends 
+The friends of Vicki Hackworth are Brian Beltran, Dominique Smock, Eli Smock.  
+## Attributes 
+The date of birth of Vicki Hackworth is 0985-05-30.  
+The occupation of Vicki Hackworth is police officer.  
+The hobby of Vicki Hackworth is meditation.  
+The gender of Vicki Hackworth is female.
+================\n\n
+# Shelli Beltran 
+## Family 
+The sister of Shelli Beltran is Stacia Toombs. 
+The mother of Shelli Beltran is Alison Smock.  
+The father of Shelli Beltran is Williams Smock.  
+The daughters of Shelli Beltran are Aida Wang, Barabara Beltran, Vicki Hackworth.  
+The husband of Shelli Beltran is Dino Beltran.  
+## Friends 
+The friends of Shelli Beltran are Brian Beltran, Eli Smock, Isiah Lutz, Leslee Toombs, Lesley Lutz, Ryan Wang.  
+## Attributes 
+The date of birth of Shelli Beltran is 0958-03-08.  
+The occupation of Shelli Beltran is occupational therapist.  
+The hobby of Shelli Beltran is sociology.  
+The gender of Shelli Beltran is female.
+================\n\n
+# Dino Beltran 
+## Family 
+The brother of Dino Beltran is Orlando Beltran.  
+The mother of Dino Beltran is Daisy Beltran.  
+The father of Dino Beltran is Brian Beltran.  
+The daughters of Dino Beltran are Aida Wang, Barabara Beltran, Vicki Hackworth.  
+The wife of Dino Beltran is Shelli Beltran.  
+## Friends
+The friend of Dino Beltran is Alvaro Smock.  
+## Attributes 
+The date of birth of Dino Beltran is 0958-08-09.  
+The occupation of Dino Beltran is associate professor.  
+The hobby of Dino Beltran is shogi.  
+The gender of Dino Beltran is male.
+
+
+### EVALUATION
+{{"relevant_references": ["Vicki Hackworth", "Shelli Beltran", "Dino Beltran"]}}
+"""
+class ContextFilterLLMPrompt(LLMPrompt):
+    CONTEXT_FILTER_INSTRUCTION = f"""
+    You are an expert LLM evaluator that excels at evaluating a QUESTION and REFERENCES. Consider the following criteria:
+    A REFERENCE is considered relevant if it contains supporting/direct information or can help in answering the question. A REFERENCE that does not contain helpful information for the question or is off-topic for the question should be considered irrelavant. Use the title for the REFERENCE to populate the output list, where the list should contain all the relevant references. Include each title exactly once in the output list. Output the ### EVALUATION.
+
+    EXAMPLE:
+    {{example}}
+
+    Remember the instructions: You are an expert LLM evaluator that excels at evaluating a QUESTION and REFERENCES depending on if a reference is relavant to the QUESTION. Please evaluate the following QUESTION and REFERENCES to output the a list that contains only the titles of relevant references. Include each title exactly once in the output list.
+    ### QUESTION
+    {{question}}
+    ### REFERENCES
+    {{evidence}}
+    """
+    def get_prompt(self, prolog_query: bool = False) -> PromptTemplate:
+        """Get the sufficient context autorater prompt template.
+
+        Args:
+            prolog_query: This parameter is not used for sufficient context autorater prompts, as they do not support Prolog query generation.
+
+        Returns:
+            A PromptTemplate object containing the sufficient context autorater prompt template.
+        """
+        return PromptTemplate(
+            input_variables=["example", "question", "evidence"],
+            template=self.SUFFICIENT_CONTEXT_AUTORATER_INSTRUCTION,
+        )
 
 RERANKER_LLM_EXAMPLE = f"""
 ### QUESTION
