@@ -327,7 +327,6 @@ async def main(args: argparse.Namespace) -> None:
                     "cot-rag",
                     "cot-reranker",
                     "cot-rag-reranker",
-                    "sufficient-context-autorater",
                     "llm-reranker",
                     "llm-rag-reranker",
                 ]
@@ -351,7 +350,7 @@ async def main(args: argparse.Namespace) -> None:
                         # Run all agents in parallel using asyncio.gather
                         responses: list[LLMChatResponse] = []
                         agents = [deepcopy(agent) for _ in range(batch_size)]
-
+                        inf_gen_config = default_inf_gen_config.model_copy(update=dict(seed=seed), deep=True)
                         responses = await asyncio.gather(
                             *[
                                 agent.run(
