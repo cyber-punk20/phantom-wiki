@@ -59,7 +59,7 @@ def get_agent_kwargs(args: argparse.Namespace) -> dict:
             agent_kwargs = dict(prolog_query=args.prolog_query)
         case "zeroshot-sca":
             agent_kwargs = dict(prolog_query=args.prolog_query)
-        case "zeroshot-reranker":
+        case "zeroshot-reranker" | "zeroshot-rag-reranker":
             agent_kwargs = dict(prolog_query=args.prolog_query)
         case "fewshot":
             agent_kwargs = dict(
@@ -97,7 +97,7 @@ def get_agent_kwargs(args: argparse.Namespace) -> dict:
                 cot_examples=COT_EXAMPLES if not args.prolog_query else COT_EXAMPLES_PROLOG,
                 prolog_query=args.prolog_query,
             )
-        case "cot-reranker":
+        case "cot-reranker" | "cot-rag-reranker":
             agent_kwargs = dict(
                 cot_examples=COT_EXAMPLES if not args.prolog_query else COT_EXAMPLES_PROLOG,
                 prolog_query=args.prolog_query,
@@ -222,9 +222,9 @@ async def main(args: argparse.Namespace) -> None:
                 logger.info(f"Loading SCA evidence from {evidence_path}")
                 df_text = pd.read_json(evidence_path, lines=True)
             
-            if args.method == "cot-reranker" or args.method == "zeroshot-reranker" or args.method == "fewshot-reranker":
+            if args.method == "cot-reranker" or args.method == "zeroshot-reranker" or args.method == "fewshot-reranker" or args.method == "zeroshot-rag-reranker" or args.method == "fewshot-rag-reranker" or args.method == "cot-rag-reranker":
                 if not args.reranker_evidence_path:
-                    raise ValueError("`--reranker_evidence_path` must be provided for `cot-reranker`/`zeroshot-reranker`/`fewshot-reranker` method.")
+                    raise ValueError("`--reranker_evidence_path` must be provided for `cot-reranker`/`zeroshot-reranker`/`fewshot-reranker`/`zeroshot-rag-reranker`/`cot-rag-reranker` method.")
                 evidence_path = os.path.join(args.reranker_evidence_path, f"{split}.jsonl")
                 logger.info(f"Loading reranker evidence from {evidence_path}")
                 df_text = pd.read_json(evidence_path, lines=True)
@@ -258,7 +258,10 @@ async def main(args: argparse.Namespace) -> None:
                 "sufficient-context-autorater",
                 "zeroshot-reranker",
                 "fewshot-reranker",
+                "zeroshot-rag-reranker",
+                "fewshot-rag-reranker"
                 "cot-reranker",
+                "cot-rag-reranker"
             ]:
                 batch_size = num_df_qa_pairs
             else:
@@ -312,7 +315,7 @@ async def main(args: argparse.Namespace) -> None:
                     "zeroshot-sc",
                     "zeroshot-rag",
                     "zeroshot-reranker",
-                    "cot-reranker",
+                    "zeroshot-rag-reranker",
                     "fewshot",
                     "fewshot-sc",
                     "fewshot-sca",
@@ -323,10 +326,12 @@ async def main(args: argparse.Namespace) -> None:
                     "cot-sc",
                     "cot-rag",
                     "cot-reranker",
+                    "cot-rag-reranker",
                     "sufficient-context-autorater",
                     "llm-reranker",
                     "llm-rag-reranker",
                 ]
+
                 match args.method:
                     case method if method in methods_with_batch_run:
                         questions: list[str] = batch_df_qa_pairs["question"].tolist()
@@ -345,7 +350,6 @@ async def main(args: argparse.Namespace) -> None:
                     case "react" | "act" | "react->cot-sc" | "cot-sc->react" | "sufficient-context-autorater":
                         # Run all agents in parallel using asyncio.gather
                         responses: list[LLMChatResponse] = []
-                        inf_gen_config = default_inf_gen_config.model_copy(update=dict(seed=seed), deep=True)
                         agents = [deepcopy(agent) for _ in range(batch_size)]
 
                         responses = await asyncio.gather(

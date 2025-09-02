@@ -43,7 +43,7 @@ def get_agent(
             return NshotSCAgent(text_corpus, llm_prompt, **agent_kwargs)
         case "zeroshot-sca" | "fewshot-sca":
             return NshotWithSCAAgent(text_corpus, llm_prompt, **agent_kwargs)
-        case "zeroshot-reranker" | "fewshot-reranker":
+        case "zeroshot-reranker" | "fewshot-reranker" | "zeroshot-rag-reranker" | "fewshot-rag-reranker":
             return NshotWithLLMRankerAgent(text_corpus, llm_prompt, **agent_kwargs)
         case "cot":
             return CoTAgent(text_corpus, llm_prompt, **agent_kwargs)
@@ -51,7 +51,7 @@ def get_agent(
             return CoTSCAgent(text_corpus, llm_prompt, **agent_kwargs)
         case "cot-sca":
             return CoTWithSCAAgent(text_corpus, llm_prompt, **agent_kwargs)
-        case "cot-reranker":
+        case "cot-reranker" | "cot-rag-reranker":
             return CoTWithLLMRerankerAgent(text_corpus, llm_prompt, **agent_kwargs)
         case "react":
             return ReactAgent(text_corpus, llm_prompt, **agent_kwargs)
