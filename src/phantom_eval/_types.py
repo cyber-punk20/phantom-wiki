@@ -55,4 +55,5 @@ class LLMChatResponse(BaseModel):
     error: str | None = None
     sca_signal: bool | None = None
     reranker_result: list[str] | None = None
+    has_valid_reranker_result: bool | None = None
     convs: list[Conversation] | Conversation | None = None

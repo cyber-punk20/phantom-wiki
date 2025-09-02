@@ -143,6 +143,11 @@ def get_agent_kwargs(args: argparse.Namespace) -> dict:
                 corpus_path=args.corpus_path,
                 sca_max_steps=args.sca_max_steps,
             )
+        case "llm-rag-reranker":
+            agent_kwargs = dict(
+                index_path=args.index_path,
+                corpus_path=args.corpus_path,
+            )
         case "react":
             agent_kwargs = dict(
                 max_steps=args.react_max_steps,
@@ -426,6 +431,7 @@ def save_preds(
             "prolog_query_results": query_results if args.log_level.upper() == "DEBUG" else None,
             "error": responses[i].error,
             "sca_signal": responses[i].sca_signal,
+            "has_valid_reranker_result": responses[i].has_valid_reranker_result,
             "interaction": interactions[i].model_dump() if interactions else [],
             "metadata": {
                 "model": args.model_name,
