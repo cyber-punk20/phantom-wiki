@@ -329,6 +329,8 @@ async def main(args: argparse.Namespace) -> None:
                     "cot-rag-reranker",
                     "llm-reranker",
                     "llm-rag-reranker",
+                    "llm-filter",
+                    "llm-rag-filter",
                 ]
 
                 match args.method:
@@ -435,6 +437,7 @@ def save_preds(
             "error": responses[i].error,
             "sca_signal": responses[i].sca_signal,
             "has_valid_reranker_result": responses[i].has_valid_reranker_result,
+            "has_valid_filter_result": responses[i].has_valid_filter_result,
             "interaction": interactions[i].model_dump() if interactions else [],
             "metadata": {
                 "model": args.model_name,

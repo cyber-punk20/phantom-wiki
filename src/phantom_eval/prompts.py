@@ -165,7 +165,7 @@ class ContextFilterLLMPrompt(LLMPrompt):
         """
         return PromptTemplate(
             input_variables=["example", "question", "evidence"],
-            template=self.SUFFICIENT_CONTEXT_AUTORATER_INSTRUCTION,
+            template=self.CONTEXT_FILTER_INSTRUCTION,
         )
 
 RERANKER_LLM_EXAMPLE = f"""
@@ -1150,5 +1150,7 @@ def get_llm_prompt(method: str, model_name: str) -> LLMPrompt:
             return SufficientContextAutoraterPrompt()
         case "llm-reranker" | "llm-rag-reranker":
             return RerankerLLMPrompt()
+        case "llm-filter" | "llm-rag-filter":
+            return ContextFilterLLMPrompt()
         case _:
             raise ValueError(f"Method {method} not supported.")

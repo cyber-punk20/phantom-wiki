@@ -879,7 +879,7 @@ class LLMFilter(Agent):
         inf_gen_config = inf_gen_config.model_copy(update=dict(stop_sequences=[]), deep=True)
         response = await llm_chat.generate_response(conv, inf_gen_config)
         relevant_evidences = parse_context_filter_response(response.pred)
-        logger.debug(f"\n\t>>>ranking_list: {relevant_evidences}\n")
+        logger.debug(f"\n\t>>>relevant_evidences: {relevant_evidences}\n")
         if len(relevant_evidences) == 0:
             filtered_evidence = get_all_evidence(self.text_corpus)
             has_valid_filter_result = False
@@ -927,6 +927,114 @@ class LLMFilter(Agent):
             relevant_evidences = parse_context_filter_response(response.pred)
             if len(relevant_evidences) == 0:
                 filtered_evidence = get_all_evidence(self.text_corpus)
+                has_valid_filter_result = False
+            else:
+                filtered_evidence = filter_evidence(self.text_corpus, relevant_evidences)
+                has_valid_filter_result = True
+            llm_responses.append(LLMChatResponse(pred=filtered_evidence, usage=response.usage, convs=self.agent_interactions[i], has_valid_filter_result=has_valid_filter_result))
+        return llm_responses
+    
+
+class LLMRAGFilter(Agent, RAGMixin):
+    def __init__(
+        self,
+        text_corpus: pd.DataFrame,
+        llm_prompt: LLMPrompt,
+        fewshot_examples: str = "",
+        embedding_model_name: str = "",
+        retriever_num_documents: int = 32,
+        port: int = 8001,
+        retrieval_method: str = "bm25",
+        index_path: str = None,
+        corpus_path: str = None,
+        reranker_llm_example: str = RERANKER_LLM_EXAMPLE,
+    ):
+        RAGMixin.__init__(
+            self,
+            text_corpus,
+            embedding_model_name,
+            retriever_num_documents,
+            port,
+            retrieval_method,
+            index_path,
+            corpus_path,
+        )
+        Agent.__init__(self, text_corpus, llm_prompt)
+        self.context_filter_llm_example = CONTEXT_FILTER_LLM_EXAMPLE
+    
+    def combine_evidence_and_question(self, evidence: str, question: str) -> str:
+        return self.llm_prompt.get_prompt().format(evidence=evidence, question=question, example=self.context_filter_llm_example)
+    
+    def _build_agent_prompt(self, question: str) -> str:
+        # Retrieve relevant context
+        evidence = self.get_RAG_evidence(question)
+        return self.combine_evidence_and_question(evidence, question)
+    
+    async def run(
+        self,
+        llm_chat: LLMChat,
+        question: str,
+        inf_gen_config: InferenceGenerationConfig,
+        *args,
+        **kwargs,
+    ) -> LLMChatResponse:
+        logger.debug(f"\n\t>>> question: {question}\n")
+        prompt = self._build_agent_prompt(question)
+        conv = Conversation(messages=[Message(role="user", content=[ContentTextMessage(text=prompt)])])
+        self.agent_interactions = conv
+
+        # Generate response
+        inf_gen_config = inf_gen_config.model_copy(update=dict(stop_sequences=[]), deep=True)
+        response = await llm_chat.generate_response(conv, inf_gen_config)
+        relevant_evidences = parse_context_filter_response(response.pred)
+        logger.debug(f"\n\t>>>relevant_evidences: {relevant_evidences}\n")
+        if len(relevant_evidences) == 0:
+            filtered_evidence = self.get_RAG_evidence(question)
+            has_valid_filter_result = False
+        else:
+            filtered_evidence = filter_evidence(self.text_corpus, relevant_evidences)
+            has_valid_filter_result = True
+
+
+
+
+        # Update agent's conversation
+        self.agent_interactions.messages.append(
+            Message(role="assistant", content=[ContentTextMessage(text=str(response.pred))])
+        )
+        return LLMChatResponse(pred=filtered_evidence, usage=response.usage, has_valid_filter_result=has_valid_filter_result)
+    
+    async def batch_run(
+        self,
+        llm_chat: LLMChat,
+        questions: list[str],
+        inf_gen_config: InferenceGenerationConfig,
+        *args,
+        **kwargs,
+    ) -> list[LLMChatResponse]:
+        logger.debug(f"\n\t>>> questions: {questions}\n")
+
+        # Create a conversation for each user prompt, and initialize agent interactions
+        prompts: list[str] = [self._build_agent_prompt(question) for question in questions]
+        convs = [
+            Conversation(messages=[Message(role="user", content=[ContentTextMessage(text=prompt)])])
+            for prompt in prompts
+        ]
+        self.agent_interactions = convs
+
+        # Generate response
+        inf_gen_config = inf_gen_config.model_copy(update=dict(stop_sequences=[]), deep=True)
+        responses = await llm_chat.batch_generate_response(convs, inf_gen_config)
+
+        # Add the responses to the agent's conversations
+        llm_responses = []
+        for i, response in enumerate(responses):
+            self.agent_interactions[i].messages.append(
+                Message(role="assistant", content=[ContentTextMessage(text=response.pred)])
+            )
+            relevant_evidences = parse_context_filter_response(response.pred)
+            if len(relevant_evidences) == 0:
+                filtered_evidence = self.get_RAG_evidence(questions[i])
                 has_valid_filter_result = False
             else:
                 filtered_evidence = filter_evidence(self.text_corpus, relevant_evidences)

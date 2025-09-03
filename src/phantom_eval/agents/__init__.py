@@ -1,6 +1,6 @@
 import pandas as pd
 
-from phantom_eval.agents.common import Agent, SufficientContextAutorater, LLMReranker, LLMRAGReranker
+from phantom_eval.agents.common import Agent, SufficientContextAutorater, LLMReranker, LLMRAGReranker, LLMFilter, LLMRAGFilter
 from phantom_eval.agents.cot import CoTAgent, CoTRAGAgent, CoTSCAgent, CoTWithSCAAgent, CoTWithLLMRerankerAgent
 from phantom_eval.agents.nshot import NshotAgent, NshotRAGAgent,  NshotSCAgent, NshotWithSCAAgent, NshotWithLLMRankerAgent
 from phantom_eval.agents.react import ActAgent, CoTSC_ReactAgent, React_CoTSCAgent, ReactAgent
@@ -71,5 +71,9 @@ def get_agent(
             return LLMReranker(text_corpus, llm_prompt, **agent_kwargs)
         case "llm-rag-reranker":
             return LLMRAGReranker(text_corpus, llm_prompt, **agent_kwargs)
+        case "llm-filter":
+            return LLMFilter(text_corpus, llm_prompt, **agent_kwargs)
+        case "llm-rag-filter":
+            return LLMRAGFilter(text_corpus, llm_prompt, **agent_kwargs)
         case _:
             raise ValueError(f"Invalid method: {method}")
