@@ -54,6 +54,7 @@ class LLMChatResponse(BaseModel):
     usage: dict
     error: str | None = None
     sca_signal: bool | None = None
+    sca_signals: list[bool] | None = None
     reranker_result: list[str] | None = None
     has_valid_reranker_result: bool | None = None
     has_valid_filter_result: bool | None = None

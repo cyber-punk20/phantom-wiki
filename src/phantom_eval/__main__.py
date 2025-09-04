@@ -436,6 +436,7 @@ def save_preds(
             "prolog_query_results": query_results if args.log_level.upper() == "DEBUG" else None,
             "error": responses[i].error,
             "sca_signal": responses[i].sca_signal,
+            "sca_signals": responses[i].sca_signals,
             "has_valid_reranker_result": responses[i].has_valid_reranker_result,
             "has_valid_filter_result": responses[i].has_valid_filter_result,
             "interaction": interactions[i].model_dump() if interactions else [],

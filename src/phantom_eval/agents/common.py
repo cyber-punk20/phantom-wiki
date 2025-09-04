@@ -519,6 +519,7 @@ class SufficientContextAutorater(Agent, RAGMixin):
         logger.debug(f"\n\t>>> sca_max_steps: {self.sca_max_steps}\n")
 
         total_usage: dict = {}
+        sca_signals = []
         while (self.step_round <= self.sca_max_steps) and (not self.finished):
             logger.debug(f"\n\t>>> step_round: {self.step_round}\n")
             try:
@@ -528,6 +529,7 @@ class SufficientContextAutorater(Agent, RAGMixin):
                 if self._parse_response(response.pred):
                   self.finished = True
                 self.step_round += 1
+                sca_signals.append(self.finished)
             except Exception:
                 response = LLMChatResponse(
                     pred="", usage=total_usage, error=f"<agent_error>{traceback.format_exc()}</agent_error>"
@@ -539,7 +541,7 @@ class SufficientContextAutorater(Agent, RAGMixin):
         logger.debug(f"\n\t>>> total_usage: {total_usage}\n")
         logger.debug(f"\n\t>>> response: {response}\n")
 
-        return LLMChatResponse(pred=self.evidence, usage=total_usage, sca_signal=self.finished)
+        return LLMChatResponse(pred=self.evidence, usage=total_usage, sca_signal=self.finished, sca_signals=sca_signals)
 
 def parse_llm_reranker_response(response_text: str) -> list[str]:
     """
