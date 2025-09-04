@@ -19,19 +19,57 @@ class LLMPrompt(abc.ABC):
         """
 
 SUFFICIENT_CONTEXT_AUTORATER_EXAMPLES = f"""
-  ## EXAMPLE 1:
-  ### QUESTION
-  Who is the aunt of Vicki Hackworth?
-  ### References
-  # Vicki Hackworth ## Family The sisters of Vicki Hackworth are Aida Wang, Barabara Beltran.  The mother of Vicki Hackworth is Shelli Beltran.  The father of Vicki Hackworth is Dino Beltran.  The son of Vicki Hackworth is Virgil Hackworth.  The daughters of Vicki Hackworth are Leeann Hackworth, Leisa Lutz.  The husband of Vicki Hackworth is Ricardo Hackworth.  ## Friends The friends of Vicki Hackworth are Brian Beltran, Dominique Smock, Eli Smock.  ## Attributes The date of birth of Vicki Hackworth is 0985-05-30.  The occupation of Vicki Hackworth is police officer.  The hobby of Vicki Hackworth is meditation.  The gender of Vicki Hackworth is female.
-  # Shelli Beltran ## Family The sister of Shelli Beltran is Stacia Toombs.  The mother of Shelli Beltran is Alison Smock.  The father of Shelli Beltran is Williams Smock.  The daughters of Shelli Beltran are Aida Wang, Barabara Beltran, Vicki Hackworth.  The husband of Shelli Beltran is Dino Beltran.  ## Friends The friends of Shelli Beltran are Brian Beltran, Eli Smock, Isiah Lutz, Leslee Toombs, Lesley Lutz, Ryan Wang.  ## Attributes The date of birth of Shelli Beltran is 0958-03-08.  The occupation of Shelli Beltran is occupational therapist.  The hobby of Shelli Beltran is sociology.  The gender of Shelli Beltran is female.
-  # Dino Beltran ## Family The brother of Dino Beltran is Orlando Beltran.  The mother of Dino Beltran is Daisy Beltran.  The father of Dino Beltran is Brian Beltran.  The daughters of Dino Beltran are Aida Wang, Barabara Beltran, Vicki Hackworth.  The wife of Dino Beltran is Shelli Beltran.  ## Friends The friend of Dino Beltran is Alvaro Smock.  ## Attributes The date of birth of Dino Beltran is 0958-08-09.  The occupation of Dino Beltran is associate professor.  The hobby of Dino Beltran is shogi.  The gender of Dino Beltran is male.
+## EXAMPLE 1:
+### QUESTION
+Who is the aunt of Vicki Hackworth?
+### References
+# Vicki Hackworth 
+## Family 
+The sisters of Vicki Hackworth are Aida Wang, Barabara Beltran.  
+The mother of Vicki Hackworth is Shelli Beltran.  
+The father of Vicki Hackworth is Dino Beltran.  
+The son of Vicki Hackworth is Virgil Hackworth.  
+The daughters of Vicki Hackworth are Leeann Hackworth, Leisa Lutz.  
+The husband of Vicki Hackworth is Ricardo Hackworth.  
+## Friends 
+The friends of Vicki Hackworth are Brian Beltran, Dominique Smock, Eli Smock.  
+## Attributes 
+The date of birth of Vicki Hackworth is 0985-05-30.  
+The occupation of Vicki Hackworth is police officer.  
+The hobby of Vicki Hackworth is meditation.  The gender of Vicki Hackworth is female.
+# Shelli Beltran 
+## Family 
+The sister of Shelli Beltran is Stacia Toombs.  
+The mother of Shelli Beltran is Alison Smock.  
+The father of Shelli Beltran is Williams Smock.  
+The daughters of Shelli Beltran are Aida Wang, Barabara Beltran, Vicki Hackworth.  
+The husband of Shelli Beltran is Dino Beltran.  
+## Friends 
+The friends of Shelli Beltran are Brian Beltran, Eli Smock, Isiah Lutz, Leslee Toombs, Lesley Lutz, Ryan Wang.  
+## Attributes 
+The date of birth of Shelli Beltran is 0958-03-08.  
+The occupation of Shelli Beltran is occupational therapist.  
+The hobby of Shelli Beltran is sociology.  The gender of Shelli Beltran is female.
+# Dino Beltran 
+## Family 
+The brother of Dino Beltran is Orlando Beltran.  
+The mother of Dino Beltran is Daisy Beltran.  
+The father of Dino Beltran is Brian Beltran.  
+The daughters of Dino Beltran are Aida Wang, Barabara Beltran, Vicki Hackworth.  
+The wife of Dino Beltran is Shelli Beltran.  
+## Friends 
+The friend of Dino Beltran is Alvaro Smock.  
+## Attributes 
+The date of birth of Dino Beltran is 0958-08-09.  
+The occupation of Dino Beltran is associate professor.  
+The hobby of Dino Beltran is shogi.  
+The gender of Dino Beltran is male.
 
-  ### EXPLANATION
-  The parents of Vicki Hackworth are Shelli Beltran, Dino Beltran. Dino Beltran has no sister, and the sister of Shelli Beltran is Stacia Toombs.
-  Therefore, the context does provide a precise answer to the question.
-  ### JSON
-  {{"Sufficient Context": 1}}
+### EXPLANATION
+The parents of Vicki Hackworth are Shelli Beltran, Dino Beltran. Dino Beltran has no sister, and the sister of Shelli Beltran is Stacia Toombs.
+Therefore, the context does provide a precise answer to the question.
+### JSON
+{{"Sufficient Context": 1}}
 """
 
 
