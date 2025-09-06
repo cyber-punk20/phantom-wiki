@@ -23,6 +23,10 @@ from flashrag.retriever import BM25Retriever, DenseRetriever
 from langchain_community.vectorstores import FAISS
 from langchain_core.embeddings import Embeddings
 
+import vertexai
+from google.cloud import aiplatform
+from vertexai.preview import rag
+
 from phantom_eval._types import Conversation, LLMChatResponse
 from phantom_eval.gpu_utils import get_gpu_count
 from phantom_eval.llm import InferenceGenerationConfig, LLMChat, aggregate_usage
@@ -191,6 +195,8 @@ class RAGMixin:
         retrieval_method: str = "bm25",
         index_path: str = None,
         corpus_path: str = None,
+        corpus_name: str = None,
+        vector_distance_threshold: float = None,
     ):
         """
         Args:
@@ -219,6 +225,8 @@ class RAGMixin:
                 To build the corpus, please follow the instructions at
                 https://github.com/kilian-group/phantom-wiki/wiki/RAG
                 Defaults to None.
+            corpus_name (str): The name of the corpus to use for Vertex AI Rag Engine.
+            vector_distance_threshold (float): The distance threshold for Vertex AI Rag Engine.
         """
         self.embedding_model_name = embedding_model_name
         self.retriever_num_documents = retriever_num_documents
@@ -227,7 +235,7 @@ class RAGMixin:
         # TODO: deprecate the text_corpus argument. The new workflow is to index the text corpus separately,
         # then pass the index path to the constructor.
         # Use the following arguments to check for existing retriever objects.
-        if self.retrieval_method in ["bm25", "dense"]:
+        if self.retrieval_method in ["bm25", "dense", "vertexai"]:
             key = (
                 self.retrieval_method,
                 self.embedding_model_name,
@@ -293,6 +301,14 @@ class RAGMixin:
                     logger.info(f"Retriever config: {pformat(self.retriever.config)}")
                     # Store the retriever object in the _indices dict for reuse across instances
                     self._indices[key] = self.retriever
+                case "vertexai":
+                    vertexai_config = {
+                        "retrieval_method": "vertexai",
+                        "retrieval_topk": retriever_num_documents,
+                        "corpus_name": corpus_name,
+                        "vector_distance_threshold": vector_distance_threshold,
+                    }
+                    self._vertexai_config = vertexai_config
 
         else:
             texts = text_corpus["article"].tolist()
@@ -326,6 +342,19 @@ class RAGMixin:
         if self.retrieval_method in ["bm25", "dense"]:
             docs = self.retriever._search(question, num=self.retriever_num_documents, return_score=False)
             docs = [doc["contents"] for doc in docs]
+        if self.retrieval_method == "vertexai":
+            rag_resource = rag.RagResource(
+                rag_corpus=self._vertexai_config["corpus_name"],
+                # Need to manually get the ids from rag.list_files.
+                # rag_file_ids=["7014356419629547520", "96827391988465664", "1988339235484073984", "7933090743613128704", "5339017358247723008"],
+            )
+            response = rag.retrieval_query(
+                rag_resources=[rag_resource],
+                text=question,
+                similarity_top_k=self._vertexai_config["retrieval_topk"],
+                vector_distance_threshold=self._vertexai_config["vector_distance_threshold"],
+            )
+            docs = [context.text for context in response.contexts.contexts]
         else:
             docs = [doc.page_content for doc in self.retriever.invoke(question)]
         return "\n================\n\n".join(docs)

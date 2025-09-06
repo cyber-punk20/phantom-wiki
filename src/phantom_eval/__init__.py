@@ -57,10 +57,35 @@ def get_parser() -> argparse.ArgumentParser:
         "bm25 and dense use the retriever from FlashRAG and expects a pre-computed index. "
         "vllm uses the retriever from LangChain and launches a vllm server for retrieval. "
         "NOTE: bm25 and dense can only evaluate one split at a time.",
-        choices=["bm25", "dense", "vllm"],
+        choices=["bm25", "dense", "vllm", "vertexai"],
     )
     parser.add_argument("--index_path", type=str, help="Path to the index for the retriever")
     parser.add_argument("--corpus_path", type=str, help="Path to the corpus for the retriever")
+    parser.add_argument(
+        "--vector_distance_threshold",
+        type=float,
+        default=0.5,
+        help="Threshold for vector distance for vertexai retrieval. "
+        "Documents with a distance greater than this threshold will be filtered out.",
+    )
+    parser.add_argument(
+        "--corpus_name",
+        type=str,
+        default=None,
+        help="Name of the corpus for vertexai retrieval. "
+    )
+    parser.add_argument(
+        "--vertexai_project_id",
+        type=str,
+        default=None,
+        help="Google Cloud Project ID for vertexai retrieval. ",
+    )
+    parser.add_argument(
+        "--vertexai_location",
+        type=str,
+        default="us-east4",
+        help="Location for vertexai retrieval. ",
+    )
     parser.add_argument(
         "--prolog_query",
         action="store_true",

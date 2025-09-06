@@ -8,6 +8,7 @@ from copy import deepcopy
 from pathlib import Path
 
 import pandas as pd
+import vertexai
 
 from phantom_wiki.facts.database import Database
 
@@ -90,6 +91,8 @@ def get_agent_kwargs(args: argparse.Namespace) -> dict:
                 retrieval_method=args.retrieval_method,
                 index_path=args.index_path,
                 corpus_path=args.corpus_path,
+                corpus_name=args.corpus_name,
+                vector_distance_threshold=args.vector_distance_threshold,
             )
         case "fewshot-rag":
             agent_kwargs = dict(
@@ -98,6 +101,8 @@ def get_agent_kwargs(args: argparse.Namespace) -> dict:
                 retrieval_method=args.retrieval_method,
                 index_path=args.index_path,
                 corpus_path=args.corpus_path,
+                corpus_name=args.corpus_name,
+                vector_distance_threshold=args.vector_distance_threshold,
                 fewshot_examples=FEWSHOT_EXAMPLES,
             )
         case "cot-rag":
@@ -107,6 +112,8 @@ def get_agent_kwargs(args: argparse.Namespace) -> dict:
                 retrieval_method=args.retrieval_method,
                 index_path=args.index_path,
                 corpus_path=args.corpus_path,
+                corpus_name=args.corpus_name,
+                vector_distance_threshold=args.vector_distance_threshold,
                 cot_examples=COT_EXAMPLES,
             )
         case "react":
@@ -398,6 +405,17 @@ if __name__ == "__main__":
             assert (
                 len(args.split_list) == 1
             ), "When retrieval_method is bm25 or dense, we can only evaluate one split at a time"
+        if args.retrieval_method in ["vertexai"]:
+            assert (
+                args.corpus_name is not None
+            ), "corpus_name must be specified when retrieval_method is vertexai"
+            assert (
+                args.vertexai_project_id is not None
+            ), "vertexai_project_id must be specified when retrieval_method is vertexai"
+            assert (
+                args.vertexai_location is not None
+            ), "vertexai_location must be specified when retrieval_method is vertexai"
+            vertexai.init(project=args.vertexai_project_id, location=args.vertexai_location)
 
     # NOTE: asyncio.run should only be called once in a single Python instance.
     # Thus, any high-level function containing awaits in its implementation
