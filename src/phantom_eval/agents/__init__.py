@@ -1,8 +1,8 @@
 import pandas as pd
 
 from phantom_eval.agents.common import Agent, SufficientContextAutorater
-from phantom_eval.agents.cot import CoTAgent, CoTRAGAgent, CoTSCAgent
-from phantom_eval.agents.nshot import NshotAgent, NshotRAGAgent, NshotSCAgent
+from phantom_eval.agents.cot import CoTAgent, CoTRAGAgent, CoTSCAgent, CoTSCAAgent
+from phantom_eval.agents.nshot import NshotAgent, NshotRAGAgent, NshotSCAAgent, NshotSCAgent
 from phantom_eval.agents.react import ActAgent, CoTSC_ReactAgent, React_CoTSCAgent, ReactAgent
 from phantom_eval.prompts import LLMPrompt
 
@@ -36,12 +36,16 @@ def get_agent(
     match method:
         case "zeroshot" | "fewshot":
             return NshotAgent(text_corpus, llm_prompt, **agent_kwargs)
+        case "zeroshot-sca" | "fewshot-sca":
+            return NshotSCAAgent(llm_prompt, **agent_kwargs)
         case "zeroshot-sc" | "fewshot-sc":
             return NshotSCAgent(text_corpus, llm_prompt, **agent_kwargs)
         case "cot":
             return CoTAgent(text_corpus, llm_prompt, **agent_kwargs)
         case "cot-sc":
             return CoTSCAgent(text_corpus, llm_prompt, **agent_kwargs)
+        case "cot-sca":
+            return CoTSCAAgent(llm_prompt, **agent_kwargs)
         case "react":
             return ReactAgent(text_corpus, llm_prompt, **agent_kwargs)
         case "act":

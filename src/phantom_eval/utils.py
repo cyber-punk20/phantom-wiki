@@ -1,4 +1,5 @@
 import logging
+import os
 import re
 
 from datasets import Dataset, load_dataset
@@ -11,11 +12,13 @@ from joblib import Memory, expires_after
 # stored in the 'template' column of the dataframe.
 #
 from nltk import CFG
+import pandas as pd
 
 from phantom_wiki.facts.templates import QA_GRAMMAR_STRING, generate_templates, is_aggregation_question
 from phantom_wiki.utils.hf_datasets import PhantomWikiDatasetBuilder
 
 memory = Memory("cachedir")
+logger = logging.getLogger(__name__)
 
 
 def dataset_entry_is_not_aggregation_question(entry: dict) -> bool:
@@ -136,6 +139,10 @@ def load_data(
             f"Split {split} not found in dataset {dataset}. Available splits: {available_splits}"
         )
 
+def load_sca_context_corpus(sca_context_corpus_path: str) -> pd.DataFrame:
+    logger.info(f"Loading SCA evidence from {sca_context_corpus_path}")
+    sca_context_corpus = pd.read_json(sca_context_corpus_path, lines=True)
+    return sca_context_corpus
 
 def get_relevant_articles(dataset: Dataset, name_list: list[str]) -> str:
     """

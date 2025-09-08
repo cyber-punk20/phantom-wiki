@@ -539,6 +539,19 @@ class SufficientContextAutorater(Agent, RAGMixin):
 
 
 
+def get_evidence_from_sca_context_corpus(sca_context_corpus: pd.DataFrame, question_id: str) -> str:
+    """
+    Return all articles in the sca_context_corpus concatenated as a string.
+    """
+    evidence_series = sca_context_corpus[sca_context_corpus["id"] == question_id]["context"]
+    if evidence_series.empty:
+        logger.warning(f"No evidence found in sca_context_corpus for question_id: {question_id}")
+        raise ValueError(f"No evidence found in sca_context_corpus for question_id: {question_id}")
+    else:
+        # .iloc[0] extracts the first (and only) item from the Series as a string.
+        evidence = evidence_series.iloc[0]
+        return evidence
+
 
 
 

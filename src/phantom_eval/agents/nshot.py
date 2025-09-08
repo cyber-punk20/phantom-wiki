@@ -16,9 +16,10 @@ import pandas as pd
 
 import phantom_eval.constants as constants
 from phantom_eval._types import ContentTextMessage, Conversation, LLMChatResponse, Message
-from phantom_eval.agents.common import Agent, RAGMixin, SCMixin, get_all_evidence, parse_prolog_query
+from phantom_eval.agents.common import Agent, RAGMixin, SCMixin, get_all_evidence, get_evidence_from_sca_context_corpus, parse_prolog_query
 from phantom_eval.llm import InferenceGenerationConfig, LLMChat
 from phantom_eval.prompts import LLMPrompt
+from phantom_eval.utils import load_sca_context_corpus
 
 logger = logging.getLogger(__name__)
 
@@ -281,3 +282,128 @@ class NshotRAGAgent(NshotAgent, RAGMixin):
         """
         evidence = self.get_RAG_evidence(question)
         return self.combine_evidence_and_question(evidence, question)
+
+class NshotSCAAgent(Agent):
+    def __init__(
+        self,
+        llm_prompt: LLMPrompt,
+        fewshot_examples: str = "",
+        prolog_query: bool = False,
+        sca_context_corpus_path: str = None,
+    ):
+        """
+        Args:
+            llm_prompt (LLMPrompt): The prompt to be used by the agent.
+            fewshot_examples (str): Few-shot prompt examples to include in agent prompt.
+                If "", the agent is zero-shot. Defaults to "".
+            prolog_query (bool): Whether to use the prompt for eliciting prolog queries from LLMs.
+                Passed on to `LLMPrompt.get_prompt()`. Defaults to False.
+            sca_context_corpus_path (path): The path context corpus to search for answers.
+        """
+        super().__init__([], llm_prompt)
+        self.fewshot_examples = fewshot_examples
+        self.prolog_query = prolog_query
+        self.sca_context_corpus = load_sca_context_corpus(sca_context_corpus_path)
+
+
+    def combine_evidence_and_question(self, evidence: str, question: str) -> str:
+        """
+        Combine the evidence and question to form the agent prompt using `self.llm_prompt`.
+        """
+        if self.fewshot_examples:  # Few-shot
+            return self.llm_prompt.get_prompt(self.prolog_query).format(
+                evidence=evidence, examples=self.fewshot_examples, question=question
+            )
+        else:  # Zero-shot
+            return self.llm_prompt.get_prompt(self.prolog_query).format(evidence=evidence, question=question)
+
+    def _build_agent_prompt(self, question: str, question_id: str) -> str:
+        evidence = get_evidence_from_sca_context_corpus(self.sca_context_corpus, question_id)
+        return self.combine_evidence_and_question(evidence, question)
+
+    async def run(
+        self,
+        llm_chat: LLMChat,
+        question: str,
+        inf_gen_config: InferenceGenerationConfig,
+        *args,
+        **kwargs,
+    ) -> LLMChatResponse:
+        question_id = kwargs.get("question_id")
+        if not question_id:
+            raise ValueError("`question_id` must be provided in kwargs for NshotSCAAgent.run()")
+        logger.debug(f"\n\t>>> question: {question}\n")
+
+        # Create a conversation with 1 user prompt and initialize agent interactions
+        prompt = self._build_agent_prompt(question, question_id)
+        conv = Conversation(messages=[Message(role="user", content=[ContentTextMessage(text=prompt)])])
+        self.agent_interactions = conv
+
+        # Generate response
+        inf_gen_config = inf_gen_config.model_copy(update=dict(stop_sequences=[]), deep=True)
+        response = await llm_chat.generate_response(conv, inf_gen_config)
+
+        # Update agent's conversation
+        self.agent_interactions.messages.append(
+            Message(role="assistant", content=[ContentTextMessage(text=response.pred)])
+        )
+
+        if self.prolog_query:
+            response.pred = parse_prolog_query(response.pred)
+            return response
+
+        try:
+            pred = NshotAgent.parse_answer(response.pred)
+            error = None
+        except Exception as e:
+            pred = ""
+            error = f"<agent_error>{traceback.format_exc()}</agent_error>"
+            error = f"<agent_error>{e}</agent_error>"
+        return LLMChatResponse(pred=pred, usage=response.usage, error=error)
+
+    async def batch_run(
+        self,
+        llm_chat: LLMChat,
+        questions: list[str],
+        inf_gen_config: InferenceGenerationConfig,
+        *args,
+        **kwargs,
+    ) -> list[LLMChatResponse]:
+        question_ids = kwargs.get("question_ids")
+        if not question_ids:
+            raise ValueError("`question_ids` must be provided in kwargs for NshotSCAAgent.batch_run()")
+        logger.debug(f"\n\t>>> questions: {questions}\n")
+
+        # Create a conversation for each user prompt, and initialize agent interactions
+        prompts: list[str] = []
+        for i in range(len(questions)):
+            prompts.append(self._build_agent_prompt(questions[i], question_ids[i]))
+        convs = [
+            Conversation(messages=[Message(role="user", content=[ContentTextMessage(text=prompt)])])
+            for prompt in prompts
+        ]
+        self.agent_interactions = convs
+
+        # Generate response
+        inf_gen_config = inf_gen_config.model_copy(update=dict(stop_sequences=[]), deep=True)
+        responses = await llm_chat.batch_generate_response(convs, inf_gen_config)
+
+        # Add the responses to the agent's conversations
+        for i, response in enumerate(responses):
+            self.agent_interactions[i].messages.append(
+                Message(role="assistant", content=[ContentTextMessage(text=response.pred)])
+            )
+            if self.prolog_query:
+                responses[i].pred = parse_prolog_query(response.pred)
+
+        parsed_responses: list[LLMChatResponse] = []
+        for response in responses:
+            try:
+                pred = NshotAgent.parse_answer(response.pred)
+                error = None
+            except Exception as e:
+                pred = ""
+                error = f"<agent_error>{traceback.format_exc()}</agent_error>"
+                error = f"<agent_error>{e}</agent_error>"
+            parsed_responses.append(LLMChatResponse(pred=pred, usage=response.usage, error=error))
+        return parsed_responses

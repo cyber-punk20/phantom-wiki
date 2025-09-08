@@ -904,8 +904,8 @@ class SufficientContextAutoraterPrompt(LLMPrompt):
   First, output a list of step-by-step questions that would be used to arrive at a label for the criteria. 
   Make sure to include questions about assumptions implicit in the QUESTION.
   Next, answer each of the questions. Finally, use these answers to evaluate the criteria.
-  Output the ### EXPLANATION (Text). Then, use the EXPLANATION to output the ### JSON.
-  Keep the ### EXPLANATION (Text) short. DO NOT include any additional information in ### JSON.
+  Output the ### EXPLANATION. Then, use the EXPLANATION to output the ### JSON.
+  Keep the ### EXPLANATION short. DO NOT include any additional information in ### JSON.
 
   Here is an example:
   {{example}}
@@ -934,11 +934,11 @@ class SufficientContextAutoraterPrompt(LLMPrompt):
 def get_llm_prompt(method: str, model_name: str) -> LLMPrompt:
     # For react->cot-sc and cot-sc->react methods, return the LLMPrompt for the first part of the method
     match method:
-        case "zeroshot" | "zeroshot-sc":
+        case "zeroshot" | "zeroshot-sc" | "zeroshot-sca":
             return ZeroshotLLMPrompt()
-        case "fewshot" | "fewshot-sc" | "fewshot-rag":
+        case "fewshot" | "fewshot-sc" | "fewshot-rag" | "fewshot-sca":
             return FewshotLLMPrompt()
-        case "cot" | "cot-sc" | "cot-sc->react" | "cot-rag":
+        case "cot" | "cot-sc" | "cot-sc->react" | "cot-rag" | "cot-sca":
             return CoTLLMPrompt()
         case "zeroshot-rag":
             return ZeroshotLLMPrompt()

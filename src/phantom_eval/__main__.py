@@ -3,6 +3,7 @@ import asyncio
 import json
 import logging
 import math
+import os
 import tempfile
 from copy import deepcopy
 from pathlib import Path
@@ -56,9 +57,9 @@ def get_model_kwargs(args: argparse.Namespace) -> dict:
 
 def get_agent_kwargs(args: argparse.Namespace) -> dict:
     match args.method:
-        case "zeroshot":
+        case "zeroshot" | "zeroshot-sca":
             agent_kwargs = dict(prolog_query=args.prolog_query)
-        case "fewshot":
+        case "fewshot" | "fewshot-sca":
             agent_kwargs = dict(
                 fewshot_examples=FEWSHOT_EXAMPLES if not args.prolog_query else FEWSHOT_EXAMPLES_PROLOG,
                 prolog_query=args.prolog_query,
@@ -74,7 +75,7 @@ def get_agent_kwargs(args: argparse.Namespace) -> dict:
                 fewshot_examples=FEWSHOT_EXAMPLES,
                 prolog_query=args.prolog_query,
             )
-        case "cot":
+        case "cot" | "cot-sca":
             agent_kwargs = dict(
                 cot_examples=COT_EXAMPLES if not args.prolog_query else COT_EXAMPLES_PROLOG,
                 prolog_query=args.prolog_query,
@@ -198,6 +199,8 @@ async def main(args: argparse.Namespace) -> None:
 
             # Construct agent for the data split
             agent_kwargs = get_agent_kwargs(args)
+            if args.method in ["cot-sca", "zeroshot-sca", "fewshot-sca"]:
+                agent_kwargs["sca_context_corpus_path"] = os.path.join(args.sca_context_corpus_path, f"{split}.jsonl")
             agent: Agent = get_agent(
                 args.method,
                 text_corpus=df_text,
@@ -270,22 +273,27 @@ async def main(args: argparse.Namespace) -> None:
                 methods_with_batch_run = [
                     "zeroshot",
                     "zeroshot-sc",
+                    "zeroshot-sca",
                     "zeroshot-rag",
                     "fewshot",
                     "fewshot-sc",
+                    "fewshot-sca",
                     "fewshot-rag",
                     "cot",
                     "cot-sc",
+                    "cot-sca",
                     "cot-rag",
                 ]
                 match args.method:
                     case method if method in methods_with_batch_run:
                         questions: list[str] = batch_df_qa_pairs["question"].tolist()
+                        question_ids = batch_df_qa_pairs["id"].tolist()
                         inf_gen_config = default_inf_gen_config.model_copy(update=dict(seed=seed), deep=True)
                         responses: list[LLMChatResponse] = await agent.batch_run(
                             llm_chat,
                             questions,
                             inf_gen_config,
+                            question_ids=question_ids,
                         )
                         # NOTE: the agent interactions are just single Conversation objects containing the
                         # prompt for the self-consistency methods, we save the Conversation object from the
@@ -430,6 +438,11 @@ if __name__ == "__main__":
                 args.vertexai_location is not None
             ), "vertexai_location must be specified when retrieval_method is vertexai"
             vertexai.init(project=args.vertexai_project_id, location=args.vertexai_location)
+    if args.method in ["cot-sca", "zeroshot-sca", "fewshot-sca"]:
+        assert (
+            args.sca_context_corpus_path is not None
+        ), "sca_context_corpus_path must be specified when method is cot-sca,  zeroshot-sca or fewshot-sca"
+
 
     # NOTE: asyncio.run should only be called once in a single Python instance.
     # Thus, any high-level function containing awaits in its implementation
