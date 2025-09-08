@@ -2,7 +2,7 @@ import logging
 import os
 from multiprocessing import Pool
 
-from pyswip import Prolog
+# from pyswip import Prolog
 from tqdm import tqdm
 
 from phantom_wiki.facts.family.constants import PERSON_TYPE

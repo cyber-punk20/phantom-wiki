@@ -1,6 +1,6 @@
 import logging
 
-from pyswip import Variable
+# from pyswip import Variable
 
 from ..facts.database import Database
 from . import decode

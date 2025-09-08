@@ -24,7 +24,7 @@ import re
 from copy import copy
 
 from numpy.random import Generator
-from pyswip import Variable
+# from pyswip import Variable
 
 from ..utils import decode
 from .attributes.constants import ATTRIBUTE_ALIASES, ATTRIBUTE_TYPES
