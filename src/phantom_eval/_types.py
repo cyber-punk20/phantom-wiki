@@ -17,9 +17,13 @@ class Message(BaseModel):
     role: Literal["user", "assistant"]
     content: list[ContentTextMessage]
 
+class Status(BaseModel):
+    is_sufficient: bool
+
 
 class Conversation(BaseModel):
     messages: list[Message]
+    statuses: list[Status] | None = None
     uid: str = Field(default_factory=lambda: uuid4().hex)
 
     @staticmethod
@@ -53,3 +57,4 @@ class LLMChatResponse(BaseModel):
     pred: str
     usage: dict
     error: str | None = None
+    context: str | None = None

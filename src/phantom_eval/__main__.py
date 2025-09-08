@@ -25,6 +25,7 @@ from .prompts import (
     FEWSHOT_EXAMPLES,
     FEWSHOT_EXAMPLES_PROLOG,
     REACT_EXAMPLES,
+    SUFFICIENT_CONTEXT_AUTORATER_EXAMPLE,
     LLMPrompt,
     get_llm_prompt,
 )
@@ -115,6 +116,18 @@ def get_agent_kwargs(args: argparse.Namespace) -> dict:
                 corpus_name=args.corpus_name,
                 vector_distance_threshold=args.vector_distance_threshold,
                 cot_examples=COT_EXAMPLES,
+            )
+        case "sca":
+            agent_kwargs = dict(
+                embedding_model_name=args.embedding_model_name,
+                retriever_num_documents=args.retriever_num_documents,
+                retrieval_method=args.retrieval_method,
+                index_path=args.index_path,
+                corpus_path=args.corpus_path,
+                corpus_name=args.corpus_name,
+                vector_distance_threshold=args.vector_distance_threshold,
+                sufficient_context_example=SUFFICIENT_CONTEXT_AUTORATER_EXAMPLE,
+                sca_max_steps=args.sca_max_steps,
             )
         case "react":
             agent_kwargs = dict(
@@ -278,7 +291,7 @@ async def main(args: argparse.Namespace) -> None:
                         # prompt for the self-consistency methods, we save the Conversation object from the
                         # last iteration
                         agent_interactions: list[Conversation] = agent.agent_interactions
-                    case "react" | "act" | "react->cot-sc" | "cot-sc->react":
+                    case "react" | "act" | "react->cot-sc" | "cot-sc->react" | "sca":
                         # Run all agents in parallel using asyncio.gather
                         responses: list[LLMChatResponse] = []
                         inf_gen_config = default_inf_gen_config.model_copy(update=dict(seed=seed), deep=True)
@@ -361,6 +374,7 @@ def save_preds(
         preds[uid] = {
             "true": qa_sample.answer,
             "pred": pred_value,
+            "context": responses[i].context,
             "prolog_query": pred_query,
             "prolog_query_results": query_results if args.log_level.upper() == "DEBUG" else None,
             "error": responses[i].error,
@@ -394,7 +408,7 @@ if __name__ == "__main__":
             "When prolog_query is true, we can only evaluate one split at a time since only one Prolog "
             "database can be in memory at any given time due to limitations with pyswip"
         )
-    if args.method in ["zeroshot-rag", "fewshot-rag", "cot-rag"]:
+    if args.method in ["zeroshot-rag", "fewshot-rag", "cot-rag", "sca"]:
         if args.retrieval_method in ["bm25", "dense"]:
             assert (
                 args.index_path is not None

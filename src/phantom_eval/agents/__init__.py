@@ -1,6 +1,6 @@
 import pandas as pd
 
-from phantom_eval.agents.common import Agent
+from phantom_eval.agents.common import Agent, SufficientContextAutorater
 from phantom_eval.agents.cot import CoTAgent, CoTRAGAgent, CoTSCAgent
 from phantom_eval.agents.nshot import NshotAgent, NshotRAGAgent, NshotSCAgent
 from phantom_eval.agents.react import ActAgent, CoTSC_ReactAgent, React_CoTSCAgent, ReactAgent
@@ -20,6 +20,7 @@ SUPPORTED_METHOD_NAMES: list[str] = [
     "zeroshot-rag",
     "fewshot-rag",
     "cot-rag",
+    "sca"
 ]
 
 
@@ -53,5 +54,7 @@ def get_agent(
             return NshotRAGAgent(text_corpus, llm_prompt, **agent_kwargs)
         case "cot-rag":
             return CoTRAGAgent(text_corpus, llm_prompt, **agent_kwargs)
+        case "sca":
+            return SufficientContextAutorater(text_corpus, llm_prompt, **agent_kwargs)
         case _:
             raise ValueError(f"Invalid method: {method}")

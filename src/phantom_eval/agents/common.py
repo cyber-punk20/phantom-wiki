@@ -12,10 +12,12 @@ using different LLM prompts and chat interfaces.
 """
 
 import abc
+import json
 import logging
 import subprocess
 from collections import Counter
 from pprint import pformat
+import traceback
 
 import openai
 import pandas as pd
@@ -27,7 +29,7 @@ import vertexai
 from google.cloud import aiplatform
 from vertexai.preview import rag
 
-from phantom_eval._types import Conversation, LLMChatResponse
+from phantom_eval._types import ContentTextMessage, Conversation, LLMChatResponse, Message, Status
 from phantom_eval.gpu_utils import get_gpu_count
 from phantom_eval.llm import InferenceGenerationConfig, LLMChat, aggregate_usage
 from phantom_eval.prompts import LLMPrompt
@@ -334,13 +336,14 @@ class RAGMixin:
             vectorstore = FAISS.from_texts(texts, embeddings)
             self.retriever = vectorstore.as_retriever(search_kwargs={"k": retriever_num_documents})
 
-    def get_RAG_evidence(self, question: str) -> str:
+    def get_RAG_evidence(self, question: str, sca_steps: int = 1) -> str:
         """
         Returns retrieved articles given the question from the text corpus.
         The retrieved articles are concatenated as a string.
         """
+        retriever_num_documents = self.retriever_num_documents * sca_steps
         if self.retrieval_method in ["bm25", "dense"]:
-            docs = self.retriever._search(question, num=self.retriever_num_documents, return_score=False)
+            docs = self.retriever._search(question, num=retriever_num_documents, return_score=False)
             docs = [doc["contents"] for doc in docs]
         if self.retrieval_method == "vertexai":
             rag_resource = rag.RagResource(
@@ -351,13 +354,192 @@ class RAGMixin:
             response = rag.retrieval_query(
                 rag_resources=[rag_resource],
                 text=question,
-                similarity_top_k=self._vertexai_config["retrieval_topk"],
+                similarity_top_k=retriever_num_documents,
                 vector_distance_threshold=self._vertexai_config["vector_distance_threshold"],
             )
             docs = [context.text for context in response.contexts.contexts]
         else:
             docs = [doc.page_content for doc in self.retriever.invoke(question)]
         return "\n================\n\n".join(docs)
+    
+
+class SufficientContextAutorater(Agent, RAGMixin):
+    """
+    SufficientContextAutorater will keep retrieving documents until receiving a sufficient context signal from the LLM.
+    """
+    def __init__(
+        self,
+        text_corpus: pd.DataFrame,
+        llm_prompt: LLMPrompt,
+        sufficient_context_example: str = "",
+        sca_max_steps: int = 5,
+        embedding_model_name: str = "",
+        retriever_num_documents: int = 4,
+        port: int = 8001,
+        retrieval_method: str = "vertexai",
+        index_path: str = None,
+        corpus_path: str = None,
+        corpus_name: str = None,
+        vector_distance_threshold: float = None,
+    ):
+        """
+        Args:
+            text_corpus (pd.DataFrame): The text corpus to search for answers.
+                Must contain two columns: 'title' and 'article'.
+            llm_prompt (LLMPrompt): The prompt to be used by the agent.
+            sufficient_context_example (str): Prompt examples to include in agent prompt.
+                Defaults to "".
+            sca_max_steps (int): The maximum number of sca steps to take.
+                Defaults to 5.
+            embedding_model_name (str): The name of the embedding model to use for retrieval.
+                Defaults to "".
+            retriever_num_documents (int): The number of documents to retrieve.
+                Defaults to 4.
+            port (int): The port to use for the retriever.
+                Defaults to 8001.
+            retrieval_method (str): The retrieval method to use. Can be "faiss", "bm25" or "dense".
+                Defaults to "bm25".
+            index_path (str): The path to the index file for the BM25 or dense retriever.
+                Defaults to None.
+            corpus_path (str): The path to the corpus file for the BM25 or dense retriever.
+                Defaults to None.
+
+        """
+        Agent.__init__(self, text_corpus, llm_prompt)
+        RAGMixin.__init__(
+            self,
+            text_corpus,
+            embedding_model_name,
+            retriever_num_documents,
+            port,
+            retrieval_method,
+            index_path,
+            corpus_path,
+            corpus_name,
+            vector_distance_threshold,
+        )
+        self.sufficient_context_example = sufficient_context_example
+        self.sca_max_steps = sca_max_steps
+
+        self.reset()
+
+    def reset(self) -> None:
+        self.step_round = 1
+        self.is_sufficient = False
+        self.evidence: str = ""
+        self.agent_interactions: Conversation = Conversation(messages=[], statuses=[])
+    
+    def _parse_response(self, response_text: str) -> bool:
+        """
+        Parses the LLM's response to check for context sufficiency.
+
+        Args:
+            response_text: The text generated by the language model.
+
+        Returns:
+            True if the context is sufficient, False otherwise.
+        """
+        # Find the JSON part of the response
+        json_start = response_text.index("{")
+        json_end = response_text.rfind("}") + 1
+        json_str = response_text[json_start: json_end]
+        # Parse the JSON
+        json_obj = json.loads(json_str)
+        # Check for the sufficiency signal
+        return json_obj.get("Sufficient Context") == 1
+    
+    async def batch_run(
+        self,
+        llm_chat: LLMChat,
+        questions: list[str],
+        inf_gen_config: InferenceGenerationConfig,
+        *args,
+        **kwargs,
+    ) -> list[LLMChatResponse]:
+        raise NotImplementedError("Batch run is not supported for SufficientContextAutorater.")
+    
+    def _build_agent_prompt(self, question: str) -> str:
+        # Retrieve relevant context
+        self.evidence = self.get_RAG_evidence(question, self.step_round)
+        return self.llm_prompt.get_prompt().format(
+            evidence=self.evidence, example=self.sufficient_context_example, question=question
+        )
+    
+    async def _prompt_agent(
+        self,
+        llm_chat: LLMChat,
+        question: str,
+        inf_gen_config: InferenceGenerationConfig,
+    ) -> LLMChatResponse:
+        """
+        Prompts the LLM with the agent's current prompt (created from question, evidence,
+        and `step_round`). The `step_round` is not part of the scratchpad,
+        but is used to indicate the current step.".
+
+        Args:
+            llm_chat (LLMChat): The LLMChat object to use for generating responses.
+            question (str): The question to ask the agent.
+            inf_gen_config (InferenceGenerationConfig): The inference generation config to use
+                for generating responses.
+        """
+        # Put the full scratchpad in the prompt and ask the LLM to generate.
+        # All of the back and forth conversation so far becomes the user prompt.
+        user_message: str = self._build_agent_prompt(question)
+        self.agent_interactions.messages.append(
+            Message(role="user", content=[ContentTextMessage(text=user_message)])
+        )
+        conv: Conversation = Conversation(
+            messages=[
+                Message(role="user", content=[ContentTextMessage(text=user_message)])
+            ]
+        )
+        response: LLMChatResponse = await llm_chat.generate_response(conv, inf_gen_config)
+        self.agent_interactions.messages.append(
+            Message(role="assistant", content=[ContentTextMessage(text=response.pred)])
+        )
+        return response
+    
+    async def run(
+        self,
+        llm_chat: LLMChat,
+        question: str,
+        inf_gen_config: InferenceGenerationConfig,
+        *args,
+        **kwargs,
+    ) -> LLMChatResponse:
+        logger.debug(f"\n\t>>> question: {question}\n")
+        logger.debug(f"\n\t>>> sca_max_steps: {self.sca_max_steps}\n")
+        total_usage: dict = {}
+        while (self.step_round <= self.sca_max_steps) and (not self.is_sufficient):
+            try:
+                response = await self._prompt_agent(llm_chat, question, inf_gen_config)
+                total_usage = aggregate_usage([total_usage, response.usage])
+                # Check if the context is sufficient
+                if self._parse_response(response.pred):
+                  self.is_sufficient = True
+                self.step_round += 1
+                self.agent_interactions.statuses.append(Status(is_sufficient=self.is_sufficient))
+            except Exception:
+                response = LLMChatResponse(
+                    pred="", usage=total_usage, error=f"<agent_error>{traceback.format_exc()}</agent_error>",
+                    context=self.evidence
+                )
+                break
+
+        if (self.step_round > self.sca_max_steps) and (not self.is_sufficient):
+            response = LLMChatResponse(
+                pred="",
+                usage=total_usage,
+                error=f"<agent_error>SufficientContextAutorater: sca_max_steps ({self.sca_max_steps}), step_round ({self.step_round}), "
+                "reached without finishing.</agent_error>",
+            )
+
+        return LLMChatResponse(pred=response.pred, usage=total_usage, error=response.error, context=self.evidence)
+    
+
+
+
+
 
 
 def get_all_evidence(text_corpus: pd.DataFrame) -> str:

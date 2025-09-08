@@ -72,13 +72,19 @@ def get_parser() -> argparse.ArgumentParser:
         "--corpus_name",
         type=str,
         default=None,
-        help="Name of the corpus for vertexai retrieval. "
+        help="Name of the corpus for vertexai retrieval.",
+    )
+    parser.add_argument(
+        "--sca_max_steps",
+        type=int,
+        default=4,
+        help="Maximum number of steps for the SCA agent.",
     )
     parser.add_argument(
         "--vertexai_project_id",
         type=str,
         default=None,
-        help="Google Cloud Project ID for vertexai retrieval. ",
+        help="Google Cloud Project ID for vertexai retrieval.",
     )
     parser.add_argument(
         "--vertexai_location",
