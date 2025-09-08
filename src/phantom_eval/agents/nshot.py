@@ -234,6 +234,8 @@ class NshotRAGAgent(NshotAgent, RAGMixin):
         retrieval_method: str = "bm25",
         index_path: str = None,
         corpus_path: str = None,
+        corpus_name: str = None,
+        vector_distance_threshold: float = None,
     ):
         """
         Args:
@@ -254,6 +256,10 @@ class NshotRAGAgent(NshotAgent, RAGMixin):
                 Defaults to None.
             corpus_path (str): The path to the corpus file for the BM25 or dense retriever.
                 Defaults to None.
+            corpus_name (str): The name of the corpus to use for the vertexai retriever.
+                Defaults to None.
+            vector_distance_threshold (float): The maximum distance for vertexai retrieved vectors to be considered relevant.
+                Defaults to None.
         """
         NshotAgent.__init__(self, text_corpus, llm_prompt, fewshot_examples)
         RAGMixin.__init__(
@@ -265,6 +271,8 @@ class NshotRAGAgent(NshotAgent, RAGMixin):
             retrieval_method,
             index_path,
             corpus_path,
+            corpus_name,
+            vector_distance_threshold,
         )
 
     def _build_agent_prompt(self, question: str) -> str:
