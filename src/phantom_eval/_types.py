@@ -19,6 +19,7 @@ class Message(BaseModel):
 
 class Status(BaseModel):
     is_sufficient: bool
+    query_rewrite: str
 
 
 class Conversation(BaseModel):
@@ -58,3 +59,4 @@ class LLMChatResponse(BaseModel):
     usage: dict
     error: str | None = None
     context: str | None = None
+    question: str | None = None

@@ -878,6 +878,58 @@ class ActLLMPrompt(LLMPrompt):
             input_variables=["examples", "question", "scratchpad"],
             template=self.ACT_INSTRUCTION,
         )
+    
+SCA_WITH_QR_EXAMPLE = f"""
+EXAMPLE:
+### QUESTION
+Who is the great-granddaughter of the person whose occupation is biomedical scientist?
+### References
+# Lannie Smock 
+## Family 
+The sons of Lannie Smock are Eli Smock, Gene Smock.  The husband of Lannie Smock is Alvaro Smock.  
+## Friends 
+The friends of Lannie Smock are Williams Smock, Aida Wang, Alison Smock.  
+## Attributes 
+The date of birth of Lannie Smock is 0867-08-24.  The occupation of Lannie Smock is biomedical scientist.  The hobby of Lannie Smock is bus spotting.  The gender of Lannie Smock is female.
+
+### JSON
+{{"Sufficient Context": 0, "Query Rewrite": "Who is the granddaughter of Eli Smock or the granddaughter of Gene Smock?"}}
+"""
+
+class ScaQrPrompt(LLMPrompt):
+  SCA_WITH_QR_INSTRUCTION = f"""
+  You are an expert LLM evaluator that excels at evaluating a QUESTION and REFERENCES.
+  Your task consists of two parts:
+  1. Determine if the CONTEXT is sufficient to infer the answer to the question.
+  2. If it is not sufficient, rewrite the QUESTION based on the given CONTEXT to emphasize the missing information.
+  Do not make up new concepts, just refine the QUESTION or add more information to the QUESTION. Focus on the original intent of the QUESTION and add more information to be more specific about the missing context.
+  Otherwise, output the original QUESTION.
+  Your output should be in the following format:
+  {{{{"Sufficient Context": 0/1, "Query Rewrite": "Rewritten query"}}}}
+
+  Here is an example:
+  {{example}}
+
+  Now evaluate the given QUESTION and REFERENCES.
+  ### QUESTION
+  {{question}}
+  ### REFERENCES
+  {{evidence}}
+  """
+
+  def get_prompt(self, prolog_query = False) -> PromptTemplate:
+      """Get the sca with qr prompt template.
+
+      Args:
+          prolog_query: This parameter is not used for sca with qr prompts, as they do not support Prolog query generation.
+
+      Returns:
+          A PromptTemplate object containing the sca with qr prompt template.
+      """
+      return PromptTemplate(
+          input_variables=["example", "question", "evidence"],
+          template=self.SCA_WITH_QR_INSTRUCTION,
+      )
 
 SUFFICIENT_CONTEXT_AUTORATER_EXAMPLE = f"""
 EXAMPLE:
@@ -934,11 +986,11 @@ class SufficientContextAutoraterPrompt(LLMPrompt):
 def get_llm_prompt(method: str, model_name: str) -> LLMPrompt:
     # For react->cot-sc and cot-sc->react methods, return the LLMPrompt for the first part of the method
     match method:
-        case "zeroshot" | "zeroshot-sc" | "zeroshot-sca":
+        case "zeroshot" | "zeroshot-sc" | "zeroshot-sca" | "zeroshot-sca-qr":
             return ZeroshotLLMPrompt()
-        case "fewshot" | "fewshot-sc" | "fewshot-rag" | "fewshot-sca":
+        case "fewshot" | "fewshot-sc" | "fewshot-rag" | "fewshot-sca" | "fewshot-sca-qr":
             return FewshotLLMPrompt()
-        case "cot" | "cot-sc" | "cot-sc->react" | "cot-rag" | "cot-sca":
+        case "cot" | "cot-sc" | "cot-sc->react" | "cot-rag" | "cot-sca" | "cot-sca-qr":
             return CoTLLMPrompt()
         case "zeroshot-rag":
             return ZeroshotLLMPrompt()
@@ -948,5 +1000,7 @@ def get_llm_prompt(method: str, model_name: str) -> LLMPrompt:
             return ActLLMPrompt()
         case "sca":
             return SufficientContextAutoraterPrompt()
+        case "sca-qr":
+            return ScaQrPrompt()
         case _:
             raise ValueError(f"Method {method} not supported.")

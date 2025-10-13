@@ -27,6 +27,7 @@ from .prompts import (
     FEWSHOT_EXAMPLES_PROLOG,
     REACT_EXAMPLES,
     SUFFICIENT_CONTEXT_AUTORATER_EXAMPLE,
+    SCA_WITH_QR_EXAMPLE,
     LLMPrompt,
     get_llm_prompt,
 )
@@ -57,9 +58,9 @@ def get_model_kwargs(args: argparse.Namespace) -> dict:
 
 def get_agent_kwargs(args: argparse.Namespace) -> dict:
     match args.method:
-        case "zeroshot" | "zeroshot-sca":
+        case "zeroshot" | "zeroshot-sca" | "zeroshot-sca-qr":
             agent_kwargs = dict(prolog_query=args.prolog_query)
-        case "fewshot" | "fewshot-sca":
+        case "fewshot" | "fewshot-sca" | "fewshot-sca-qr":
             agent_kwargs = dict(
                 fewshot_examples=FEWSHOT_EXAMPLES if not args.prolog_query else FEWSHOT_EXAMPLES_PROLOG,
                 prolog_query=args.prolog_query,
@@ -75,7 +76,7 @@ def get_agent_kwargs(args: argparse.Namespace) -> dict:
                 fewshot_examples=FEWSHOT_EXAMPLES,
                 prolog_query=args.prolog_query,
             )
-        case "cot" | "cot-sca":
+        case "cot" | "cot-sca" | "cot-sca-qr":
             agent_kwargs = dict(
                 cot_examples=COT_EXAMPLES if not args.prolog_query else COT_EXAMPLES_PROLOG,
                 prolog_query=args.prolog_query,
@@ -128,6 +129,18 @@ def get_agent_kwargs(args: argparse.Namespace) -> dict:
                 corpus_name=args.corpus_name,
                 vector_distance_threshold=args.vector_distance_threshold,
                 sufficient_context_example=SUFFICIENT_CONTEXT_AUTORATER_EXAMPLE,
+                sca_max_steps=args.sca_max_steps,
+            )
+        case "sca-qr":
+            agent_kwargs = dict(
+                embedding_model_name=args.embedding_model_name,
+                retriever_num_documents=args.retriever_num_documents,
+                retrieval_method=args.retrieval_method,
+                index_path=args.index_path,
+                corpus_path=args.corpus_path,
+                corpus_name=args.corpus_name,
+                vector_distance_threshold=args.vector_distance_threshold,
+                sca_with_qr_example=SCA_WITH_QR_EXAMPLE,
                 sca_max_steps=args.sca_max_steps,
             )
         case "react":
@@ -199,8 +212,9 @@ async def main(args: argparse.Namespace) -> None:
 
             # Construct agent for the data split
             agent_kwargs = get_agent_kwargs(args)
-            if args.method in ["cot-sca", "zeroshot-sca", "fewshot-sca"]:
+            if args.method in ["cot-sca", "zeroshot-sca", "fewshot-sca", "cot-sca-qr", "zeroshot-sca-qr", "fewshot-sca-qr"]:
                 agent_kwargs["sca_context_corpus_path"] = os.path.join(args.sca_context_corpus_path, f"{split}.jsonl")
+                
             agent: Agent = get_agent(
                 args.method,
                 text_corpus=df_text,
@@ -274,14 +288,17 @@ async def main(args: argparse.Namespace) -> None:
                     "zeroshot",
                     "zeroshot-sc",
                     "zeroshot-sca",
+                    "zeroshot-sca-qr",
                     "zeroshot-rag",
                     "fewshot",
                     "fewshot-sc",
                     "fewshot-sca",
+                    "fewshot-sca-qr",
                     "fewshot-rag",
                     "cot",
                     "cot-sc",
                     "cot-sca",
+                    "cot-sca-qr",
                     "cot-rag",
                 ]
                 match args.method:
@@ -299,7 +316,7 @@ async def main(args: argparse.Namespace) -> None:
                         # prompt for the self-consistency methods, we save the Conversation object from the
                         # last iteration
                         agent_interactions: list[Conversation] = agent.agent_interactions
-                    case "react" | "act" | "react->cot-sc" | "cot-sc->react" | "sca":
+                    case "react" | "act" | "react->cot-sc" | "cot-sc->react" | "sca" | "sca-qr":
                         # Run all agents in parallel using asyncio.gather
                         responses: list[LLMChatResponse] = []
                         inf_gen_config = default_inf_gen_config.model_copy(update=dict(seed=seed), deep=True)
@@ -383,6 +400,7 @@ def save_preds(
             "true": qa_sample.answer,
             "pred": pred_value,
             "context": responses[i].context,
+            "question": responses[i].question,
             "prolog_query": pred_query,
             "prolog_query_results": query_results if args.log_level.upper() == "DEBUG" else None,
             "error": responses[i].error,
@@ -416,7 +434,7 @@ if __name__ == "__main__":
             "When prolog_query is true, we can only evaluate one split at a time since only one Prolog "
             "database can be in memory at any given time due to limitations with pyswip"
         )
-    if args.method in ["zeroshot-rag", "fewshot-rag", "cot-rag", "sca"]:
+    if args.method in ["zeroshot-rag", "fewshot-rag", "cot-rag", "sca", "sca-qr"]:
         if args.retrieval_method in ["bm25", "dense"]:
             assert (
                 args.index_path is not None
@@ -438,7 +456,7 @@ if __name__ == "__main__":
                 args.vertexai_location is not None
             ), "vertexai_location must be specified when retrieval_method is vertexai"
             vertexai.init(project=args.vertexai_project_id, location=args.vertexai_location)
-    if args.method in ["cot-sca", "zeroshot-sca", "fewshot-sca"]:
+    if args.method in ["cot-sca", "zeroshot-sca", "fewshot-sca", "cot-sca-qr", "zeroshot-sca-qr", "fewshot-sca-qr"]:
         assert (
             args.sca_context_corpus_path is not None
         ), "sca_context_corpus_path must be specified when method is cot-sca,  zeroshot-sca or fewshot-sca"

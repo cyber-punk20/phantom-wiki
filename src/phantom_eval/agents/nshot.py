@@ -16,7 +16,7 @@ import pandas as pd
 
 import phantom_eval.constants as constants
 from phantom_eval._types import ContentTextMessage, Conversation, LLMChatResponse, Message
-from phantom_eval.agents.common import Agent, RAGMixin, SCMixin, get_all_evidence, get_evidence_from_sca_context_corpus, parse_prolog_query
+from phantom_eval.agents.common import Agent, RAGMixin, SCMixin, get_all_evidence, get_evidence_from_sca_context_corpus, parse_prolog_query, get_question_rewrite_from_sca_context_corpus
 from phantom_eval.llm import InferenceGenerationConfig, LLMChat
 from phantom_eval.prompts import LLMPrompt
 from phantom_eval.utils import load_sca_context_corpus
@@ -407,3 +407,23 @@ class NshotSCAAgent(Agent):
                 error = f"<agent_error>{e}</agent_error>"
             parsed_responses.append(LLMChatResponse(pred=pred, usage=response.usage, error=error))
         return parsed_responses
+    
+# class NshotSCAQRAgent(NshotSCAAgent):
+#     def __init__(
+#         self,
+#         llm_prompt: LLMPrompt,
+#         fewshot_examples: str = "",
+#         prolog_query: bool = False,
+#         sca_context_corpus_path: str = None,
+#     ):
+#         super().__init__(
+#             llm_prompt,
+#             fewshot_examples,
+#             prolog_query,
+#             sca_context_corpus_path,
+#         )
+    
+#     def _build_agent_prompt(self, question: str, question_id: str) -> str:
+#         evidence = get_evidence_from_sca_context_corpus(self.sca_context_corpus, question_id)
+#         question = get_question_rewrite_from_sca_context_corpus(self.sca_context_corpus, question_id, question)
+#         return self.combine_evidence_and_question(evidence, question)
